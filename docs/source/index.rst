@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to idaes-gtep's documentation!
-======================================
+Generation and Transmission Expansion Planning
+==============================================
 
 .. toctree::
    :maxdepth: 2
