@@ -48,7 +48,7 @@ def add_commitment_parameters(b, commitment_period, investmentStage):
         units=u.MW,
         doc="Expected renewable capacity for each renewable generator in this commitment period",
     )
-    
+
     if m.config["advanced_hydro"]:
         hydro.fix_hydropower_limits(b, commitment_period)
 

@@ -1208,7 +1208,7 @@ class ExpansionPlanningSolution:
                 # total generation.
                 total_battery_charging = 0
                 charging_file_path = os.path.join(folder_name, "charging.json")
-                
+
                 if os.path.exists(charging_file_path):
                     with open(charging_file_path, "r") as f:
                         charging_data = json.load(f)
@@ -1242,12 +1242,12 @@ class ExpansionPlanningSolution:
                 messages.append(
                     f"Total battery discharging (GWh): {total_battery_discharging_gwh}"
                 )
-                messages.append(f"Total battery charging (GWh): {total_battery_charging_gwh}")
+                messages.append(
+                    f"Total battery charging (GWh): {total_battery_charging_gwh}"
+                )
 
             def add_curtailment_metrics():
-                """Add total curtailment.
-                
-                """
+                """Add total curtailment."""
                 for curt_file in ["curtailment.json"]:
                     file_path = os.path.join(folder_name, curt_file)
 
@@ -1258,7 +1258,9 @@ class ExpansionPlanningSolution:
                         data = json.load(f)
 
                     total_curtailment = sum(float(value) for value in data.values())
-                    total_curtailment_gwh = mw_to_gwh(total_curtailment, hours_per_period=1)
+                    total_curtailment_gwh = mw_to_gwh(
+                        total_curtailment, hours_per_period=1
+                    )
 
                     messages.append(f"Total curtailment (GWh): {total_curtailment_gwh}")
                     return
@@ -1277,7 +1279,7 @@ class ExpansionPlanningSolution:
                     "renewable_investments.json",
                     "dispatchable_investments.json",
                 ]
-                
+
                 for investment_file in investment_files:
                     file_path = os.path.join(folder_name, investment_file)
 
@@ -1302,22 +1304,22 @@ class ExpansionPlanningSolution:
                             continue
 
                         installed_gens.add(gen_name)
-                
+
                         for gen_type in gen_types:
                             if gen_name.endswith(gen_type):
                                 installed_gens_by_type[gen_type] += 1
                                 break
 
-                messages.append(f"Number of installed generators: {len(installed_gens)}")
+                messages.append(
+                    f"Number of installed generators: {len(installed_gens)}"
+                )
                 messages.append("Number of installed generators by type:")
 
                 for gen_type, count in installed_gens_by_type.items():
                     messages.append(f"  installed_{gen_type}: {count}")
 
             def add_branch_investment_metrics():
-                """Add total number of newly installed branches.
-
-                """
+                """Add total number of newly installed branches."""
                 installed_branches = set()
                 file_path = os.path.join(folder_name, "dispatchable_investments.json")
 
@@ -1334,7 +1336,9 @@ class ExpansionPlanningSolution:
                         branch_name = key.split(".")[-1]
                         installed_branches.add(branch_name)
 
-                messages.append(f"Number of installed branches: {len(installed_branches)}")
+                messages.append(
+                    f"Number of installed branches: {len(installed_branches)}"
+                )
 
             add_generation_metrics()
             add_curtailment_metrics()

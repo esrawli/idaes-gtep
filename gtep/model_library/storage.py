@@ -752,6 +752,7 @@ def add_investment_storage_constraints(m, b, investment_stage):
         )
     """
 
+
 def add_storage_status_disjuncts(b, storage_set):
     """This method implements a Disjunction and its disjuncts to model
     the selection of the storage units status. The possible
