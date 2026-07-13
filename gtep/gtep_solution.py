@@ -17,6 +17,7 @@
 # date: 01/04/2024
 # Model available at http://www.optimization-online.org/DB_FILE/2017/08/6162.pdf
 
+import re
 import os
 import io
 import csv
@@ -127,6 +128,11 @@ class ExpansionPlanningSolution:
                     for p in param:
                         loads[param[p].name] = pyo.value(param[p])
 
+        weights = {}
+        if hasattr(m, "weights"):
+            for rep_per in m.representativePeriods:
+                weights[str(rep_per)] = pyo.value(m.weights[rep_per])
+
         # Output file names
         output_files = {
             "renewable_investments": renewable_investments,
@@ -140,6 +146,7 @@ class ExpansionPlanningSolution:
             "reserves": reserves,
             "charging": charging,
             "discharging": discharging,
+            "weights": weights,
         }
 
         if not os.path.exists(folder_name):
@@ -1340,10 +1347,153 @@ class ExpansionPlanningSolution:
                     f"Number of installed branches: {len(installed_branches)}"
                 )
 
+            def add_generator_cost_metrics():
+                """Read costs.json and report total generator costs by
+                type.
+
+                Includes:
+                - thermalGeneratorCost by generator type
+                - hydroGeneratorCost by hydro type
+                - renewableGeneratorCost by solar/wind type
+
+                Representative-period weights are read from
+                weights.json and used when summing costs. Costs are
+                reported in billions of dollars (B$).
+
+                """
+                costs_file_path = os.path.join(folder_name, "costs.json")
+                weights_file_path = os.path.join(folder_name, "weights.json")
+
+                if not os.path.exists(costs_file_path):
+                    print(f"[WARNING] File not found: {costs_file_path}")
+                    return
+
+                with open(costs_file_path, "r") as f:
+                    data = json.load(f)
+
+                if os.path.exists(weights_file_path):
+                    with open(weights_file_path, "r") as f:
+                        weights = json.load(f)
+                else:
+                    print(
+                        f"[WARNING] File not found: {weights_file_path}. Using weight = 1."
+                    )
+                    weights = {}
+
+                def get_rep_weight(key):
+                    """Return representative-period weight for a cost key."""
+                    match = re.search(r"representativePeriod\[(.*?)\]", key)
+                    if match is None:
+                        return 1
+
+                    rep_per = match.group(1).strip("'\"")
+                    return float(weights.get(rep_per, 1))
+
+                def collect_costs_by_type(cost_key, type_list):
+                    cost_by_type = defaultdict(float)
+
+                    for key, value in data.items():
+                        match = re.search(rf"{cost_key}\[(.*?)\]", key)
+                        if match is None:
+                            continue
+
+                        gen_name = match.group(1).strip("'\"")
+                        weighted_value = float(value) * get_rep_weight(key)
+
+                        for gen_type in type_list:
+                            if gen_name.endswith(gen_type):
+                                cost_by_type[gen_type] += weighted_value
+                                break
+                        else:
+                            cost_by_type["other"] += weighted_value
+
+                    return cost_by_type
+
+                def add_cost_messages(label, cost_by_type):
+                    total_cost = sum(cost_by_type.values())
+                    total_cost_billions = total_cost / 1e9
+
+                    messages.append(f"Total {label} cost (B$): {total_cost_billions}")
+                    messages.append(f"Total {label} cost by type:")
+
+                    for gen_type, total_cost in cost_by_type.items():
+                        total_cost_billions = total_cost / 1e9
+                        messages.append(
+                            f"  {gen_type}_{label}_cost_(B$): {total_cost_billions}"
+                        )
+
+                thermal_cost_by_type = collect_costs_by_type(
+                    "thermalGeneratorCost",
+                    gen_types,
+                )
+
+                hydro_cost_by_type = collect_costs_by_type(
+                    "hydroGeneratorCost",
+                    ["hydro", "hydro-c"],
+                )
+
+                renewable_cost_by_type = collect_costs_by_type(
+                    "renewableGeneratorCost",
+                    ["solar", "wind", "pv-c", "wind-c"],
+                )
+
+                add_cost_messages("thermal_generator", thermal_cost_by_type)
+                add_cost_messages("hydro_generator", hydro_cost_by_type)
+                add_cost_messages("renewable_generator", renewable_cost_by_type)
+
+            def add_fixed_operating_cost_metrics():
+                """Read costs.json and report total fixed operating cost.
+
+                Uses operatingCostCommitment entries as the fixed operating cost
+                proxy and applies representative-period weights from weights.json.
+                Costs are reported in billions of dollars (B$).
+                """
+                costs_file_path = os.path.join(folder_name, "costs.json")
+                weights_file_path = os.path.join(folder_name, "weights.json")
+
+                if not os.path.exists(costs_file_path):
+                    print(f"[WARNING] File not found: {costs_file_path}")
+                    return
+
+                with open(costs_file_path, "r") as f:
+                    data = json.load(f)
+
+                if os.path.exists(weights_file_path):
+                    with open(weights_file_path, "r") as f:
+                        weights = json.load(f)
+                else:
+                    print(
+                        f"[WARNING] File not found: {weights_file_path}. Using weight = 1."
+                    )
+                    weights = {}
+
+                def get_rep_weight(key):
+                    match = re.search(r"representativePeriod\[(.*?)\]", key)
+                    if match is None:
+                        return 1
+
+                    rep_per = match.group(1).strip("'\"")
+                    return float(weights.get(rep_per, 1))
+
+                total_fixed_operating_cost = 0
+                for key, value in data.items():
+                    if not key.endswith("operatingCostCommitment"):
+                        continue
+
+                    total_fixed_operating_cost += float(value) * get_rep_weight(key)
+
+                total_fixed_operating_cost_billions = total_fixed_operating_cost / 1e9
+
+                messages.append(
+                    f"Total fixed operating cost fom (B$): {total_fixed_operating_cost_billions}"
+                )
+
             add_generation_metrics()
             add_curtailment_metrics()
             add_generator_investment_metrics()
             add_branch_investment_metrics()
+            add_generator_cost_metrics()
+            add_fixed_operating_cost_metrics()
 
             return messages
 
