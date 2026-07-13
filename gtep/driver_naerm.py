@@ -46,9 +46,12 @@ rep_weights = [27, 32, 32, 37, 21, 29, 13, 25, 21, 21, 23, 26, 17, 23, 18]
 # Add data paths and create directory to save results
 data_date = "7-08-2026"
 dir_name = f"NAERM_initial_testing_{data_date}"
+data_path = f"data/WECC_ADS_PNNL_{data_date}"
+
+# Create results directory
 os.makedirs(dir_name, exist_ok=True)
 print(f"\n Creating the directory '{dir_name}' to save the results. Working on it ...")
-data_path = f"data/WECC_ADS_PNNL_{data_date}"
+
 data_object = ExpansionPlanningData(
     stages=1,
     num_reps=15,
