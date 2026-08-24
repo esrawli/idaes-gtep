@@ -24,7 +24,7 @@ data:
   # TODO: Replace with weights corresponding to the representative days.
   # These should have the same length as representative_dates.
   representative_weights:
-    - 90
+    - 1
 
   prescient_options:
     data_path: /home/esrawli/envs/idaes-gtep/downloads/idaes-gtep/gtep/data/base_case_pcm_2030
