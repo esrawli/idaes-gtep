@@ -1,15 +1,15 @@
 run:
   name: gtep_ph_2030_pcm
-  output_dir: /scratch/jkskolf/gtep_ph_runs/gtep_ph_2030_pcm
+  output_dir: /home/esrawli/scratch/gtep_ph_runs/gtep_ph_2030_pcm
   clean_output_dir: true
 
 data:
-  data_path: /home/jkskolf/2030_pcm_case/base_case_pcm_2030
+  data_path: /home/esrawli/envs/idaes-gtep/downloads/idaes-gtep/gtep/data/base_case_pcm_2030/
 
   stages: 1
 
   # TODO: Set this equal to the number of representative dates below.
-  num_reps: 4
+  num_reps: 1
 
   len_reps: 24
   num_commit: 24
@@ -20,20 +20,14 @@ data:
   # from the 2030 PCM dataset.
   representative_dates:
     - "2030-01-01 00:00"
-    - "2030-04-01 00:00"
-    - "2030-07-01 00:00"
-    - "2030-10-01 00:00"
 
   # TODO: Replace with weights corresponding to the representative days.
   # These should have the same length as representative_dates.
   representative_weights:
-    - 90
-    - 90
-    - 95
-    - 90
-
+    - 1
+   
   prescient_options:
-    data_path: /home/jkskolf/2030_pcm_case/base_case_pcm_2030
+    data_path: /home/esrawli/envs/idaes-gtep/downloads/idaes-gtep/gtep/data/base_case_pcm_2030/
     num_days: 365
     ruc_horizon: 36
     start_date: "2030-01-01"
@@ -79,13 +73,13 @@ solver:
   time_limit: 14400
   threads: 120
 
-  license_file: ~/naerm_xpauth.xpr
-  license_env_var: XPAUTH_PATH
+  license_file: ~/solvers/naerm_xpauth.xpr
+  license_env_var: XPRESS_FILE
 
   environment:
-    TMPDIR: /scratch/jkskolf/gtep_tmp
-    TMP: /scratch/jkskolf/gtep_tmp
-    TEMP: /scratch/jkskolf/gtep_tmp
+    TMPDIR: /home/esrawli/scratch/gtep_tmp
+    TMP: /home/esrawli/scratch/gtep_tmp
+    TEMP: /home/esrawli/scratch/gtep_tmp
 
   log_file: null
 
