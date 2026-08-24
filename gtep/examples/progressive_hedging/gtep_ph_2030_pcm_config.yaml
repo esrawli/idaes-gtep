@@ -19,7 +19,7 @@ data:
   # TODO: Replace these with the desired representative-day timestamps
   # from the 2030 PCM dataset.
   representative_dates:
-    - "2030-01-01 00:00"
+    - "2030-07-12 00:00"
 
   # TODO: Replace with weights corresponding to the representative days.
   # These should have the same length as representative_dates.
