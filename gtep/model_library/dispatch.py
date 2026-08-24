@@ -282,17 +282,14 @@ def add_dispatch_constraints(b, disp_per):
             balance += sum(b.powerFlow[i] for i in start_points)
             # Add generation to constraint
             balance += sum(
-                b.thermalGeneration[g]
-                for g in m.thermalGeneratorsByBus[bus]
+                b.thermalGeneration[g] for g in m.thermalGeneratorsByBus[bus]
             )
             balance += sum(
-                b.renewableGeneration[g]
-                for g in m.renewableGeneratorsByBus[bus]
+                b.renewableGeneration[g] for g in m.renewableGeneratorsByBus[bus]
             )
             if m.config["advanced_hydro"]:
                 balance += sum(
-                    b.hydroGeneration[g]
-                    for g in m.hydroGeneratorsByBus[bus]
+                    b.hydroGeneration[g] for g in m.hydroGeneratorsByBus[bus]
                 )
 
             # Add battery storage to constraint

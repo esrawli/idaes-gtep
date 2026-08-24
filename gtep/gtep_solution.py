@@ -1460,678 +1460,678 @@ class ExpansionPlanningSolution:
             fig.write_html(f"{plot_path}")
             print(f" -> Saved interactive stackgraph to {plot_path}")
 
-    # def create_stackgraph_and_metrics(self, results_path, rep_days, day_hour_list):
-
-    #     try:
-    #         import ujson as json
-    #     except ImportError:
-    #         import json
-
-    #     with open(f"{results_path}/generation.json", "r") as F:
-    #         gen_data = json.load(F)
-
-    #     with open(f"{results_path}/loads.json", "r") as f:
-    #         loads_data = json.load(f)
-
-    #     with open(f"{results_path}/load_shed.json", "r") as f:
-    #         load_shed_data = json.load(f)
-
-    #     with open(f"{results_path}/reserves.json", "r") as f:
-    #         reserves_data = json.load(f)
-
-    #     with open(f"{results_path}/charging.json", "r") as f:
-    #         charging_data = json.load(f)
-
-    #     with open(f"{results_path}/discharging.json", "r") as f:
-    #         discharging_data = json.load(f)
-
-    #     def parse_result_key(key, dispatch_required=False):
-    #         """Parse saved result key into time indices and asset name.
-
-    #         This avoids using pyo.ComponentUID because saved JSON keys
-    #         are constructed strings and may contain asset names that are
-    #         not valid ComponentUID strings.
-    #         """
-
-    #         def get_index(component_name, required=True):
-    #             match = re.search(rf"{component_name}\[([^\]]+)\]", key)
-
-    #             if match is None:
-    #                 if required:
-    #                     raise RuntimeError(
-    #                         f"Could not find {component_name} index in key: {key}"
-    #                     )
-    #                 return None
-
-    #             value = match.group(1).strip("'\"")
-
-    #             try:
-    #                 return int(value)
-    #             except ValueError:
-    #                 return value
-
-    #         stage = get_index("investmentStage")
-    #         period = get_index("representativePeriod")
-    #         commitment = get_index("commitmentPeriod")
-    #         dispatch = get_index("dispatchPeriod", required=dispatch_required)
-
-    #         # Support keys saved as:
-    #         #   component.asset_name
-    #         # and keys saved as:
-    #         #   component[asset_name]
-    #         last_part = key.rsplit(".", 1)[-1]
-
-    #         if "[" in last_part and last_part.endswith("]"):
-    #             asset_name = last_part.split("[", 1)[1][:-1].strip("'\"")
-    #         else:
-    #             asset_name = last_part.strip("'\"")
-
-    #         return stage, period, commitment, dispatch, asset_name
-        
-    #     # Note that these are the same colors used in the stack plots
-    #     # and pie charts above
-    #     def darken_color(hex_color, percent=0.2):
-    #         """Darken a hex color by a given percent (0.2 = 20%)"""
-    #         hex_color = hex_color.lstrip("#")
-    #         rgb = [int(hex_color[i : i + 2], 16) for i in (0, 2, 4)]
-    #         darker_rgb = [max(0, int(c * (1 - percent))) for c in rgb]
-    #         return "#" + "".join(f"{c:02x}" for c in darker_rgb)
-
-    #     tab20 = plt.get_cmap("tab20")
-    #     GEN_TYPES = {
-    #         "nuclear": mcolors.to_hex(tab20(2)),
-    #         "coal": mcolors.to_hex(tab20(5)),
-    #         "cc_gas": mcolors.to_hex(tab20(1)),
-    #         "ct_gas": mcolors.to_hex(tab20(3)),
-    #         "thermal_other": mcolors.to_hex(tab20(13)),
-    #         "steam": mcolors.to_hex(tab20(14)),
-    #         "solar": mcolors.to_hex(tab20(9)),
-    #         "wind": mcolors.to_hex(tab20(11)),
-    #         "hydro": mcolors.to_hex(tab20(19)),
-    #         "battery_discharge": mcolors.to_hex(tab20(15)),
-    #         "battery_charge": mcolors.to_hex(tab20(15)),
-    #         "ES4": mcolors.to_hex(tab20(17)),
-    #         "ps": mcolors.to_hex(tab20(19)),
-    #         "dr": mcolors.to_hex(tab20(18)),
-    #         # Candidates: 20% darker than original
-    #         "gas_cc-c": darken_color(mcolors.to_hex(tab20(1))),
-    #         "gas_ct-c": darken_color(mcolors.to_hex(tab20(3))),
-    #         "pv-c": darken_color(mcolors.to_hex(tab20(9))),
-    #         "wind-c": darken_color(mcolors.to_hex(tab20(11))),
-    #         "hydro-c": darken_color(mcolors.to_hex(tab20(19))),
-    #         "battery-c": darken_color(mcolors.to_hex(tab20(15))),
-    #         "ES4-c": darken_color(mcolors.to_hex(tab20(17))),
-    #         "ps-c": darken_color(mcolors.to_hex(tab20(19))),
-    #         "steam-c": darken_color(mcolors.to_hex(tab20(14))),
-    #     }
-    #     GEN_TYPE_HATCHES = {
-    #         # No hatch pattern for "original" types
-    #         "nuclear": "",
-    #         "coal": "",
-    #         "cc_gas": "",
-    #         "ct_gas": "",
-    #         "thermal_other": "",
-    #         "steam": "",
-    #         "solar": "",
-    #         "wind": "",
-    #         "hydro": "",
-    #         "battery_discharge": "",
-    #         "battery_charge": "",
-    #         "ES4": "",
-    #         "dr": "",
-    #         # Candidates get a hatch pattern
-    #         "gas_cc-c": "////",
-    #         "gas_ct-c": "////",
-    #         "steam-c": "////",
-    #         "pv-c": "////",
-    #         "wind-c": "////",
-    #         "hydro-c": "////",
-    #         "battery-c": "////",
-    #         "ES4-c": "////",
-    #     }
-    #     GEN_TYPE_ALIASES = {
-    #         "nuclear": "Nuclear",
-    #         "coal": "Coal",
-    #         "cc_gas": "CC",
-    #         "ct_gas": "CT",
-    #         "thermal_other": "Thermal",
-    #         "steam": "Steam",
-    #         "solar": "Solar",
-    #         "wind": "Wind",
-    #         "hydro": "Hydro",
-    #         "battery_charge": "Battery Charging",
-    #         "battery_discharge": "Battery Discharging",
-    #         "ES4": "ES4",
-    #         "dr": "DR",
-    #         "steam-c": "Steam (Candidate)",
-    #         "gas_cc-c": "CC (Candidate)",
-    #         "gas_ct-c": "CT (Candidate)",
-    #         "pv-c": "Solar (Candidate)",
-    #         "wind-c": "Wind (Candidate)",
-    #         "hydro-c": "Hydro (Candidate)",
-    #         "ES4-c": "ES4 (Candidate)",
-    #     }
-
-    #     # Map generator IDs to Unit Type using gen.csv. This avoids
-    #     # relying on the generator name ending with the unit type.
-    #     gen_uid_to_type = {
-    #         str(row["GEN UID"]): str(row["Unit Type"]).upper()
-    #         for _, row in self.gen_df.iterrows()
-    #     }
-
-    #     # Map storage IDs to storage type using storage.csv, if
-    #     # available. Storage charging/discharging is plotted using the
-    #     # artificial battery_charge and battery_discharge categories.
-    #     if hasattr(self, "storage_csv_path") and os.path.exists(self.storage_csv_path):
-    #         storage_uid_to_type = {
-    #             str(row["name"]): str(row["storage_type"]).upper()
-    #             for _, row in self.storage_df.iterrows()
-    #         }
-    #     else:
-    #         storage_uid_to_type = {}
-
-    #     # Map Unit Type values from gen.csv to the stackgraph plotting
-    #     # categories used in GEN_TYPES.
-    #     unit_type_to_plot_type = {
-    #         "CC": "cc_gas",
-    #         "CT": "ct_gas",
-    #         "COAL": "coal",
-    #         "NUC": "nuclear",
-    #         "NUCLEAR": "nuclear",
-    #         "PV": "solar",
-    #         "RTPV": "solar",
-    #         "SOLAR": "solar",
-    #         "WIND": "wind",
-    #         "HYDRO": "hydro",
-    #         "THERM": "thermal_other",
-    #         "THERMAL": "thermal_other",
-    #         "STEAM": "steam",
-    #         "ST": "steam",
-    #         "ES4": "ES4",
-    #         "DR": "dr",
-    #     }
-
-    #     # Candidate resources can be plotted separately when a
-    #     # matching candidate plotting category exists.
-    #     candidate_unit_type_to_plot_type = {
-    #         "CC": "gas_cc-c",
-    #         "CT": "gas_ct-c",
-    #         "PV": "pv-c",
-    #         "RTPV": "pv-c",
-    #         "SOLAR": "pv-c",
-    #         "WIND": "wind-c",
-    #         "HYDRO": "hydro-c",
-    #         "STEAM": "steam-c",
-    #         "ST": "steam-c",
-    #         "ES4": "ES4-c",
-    #         "BATTERY": "battery-c",
-    #         "PS": "ps-c",
-    #     }
-
-    #     def get_generator_plot_type(gen_name):
-    #         """Map generator name to stackgraph plotting type using gen.csv."""
-    #         gen_name = str(gen_name)
-
-    #         if gen_name not in gen_uid_to_type:
-    #             raise RuntimeError(
-    #                 f"Cannot map generator '{gen_name}' to a Unit Type. "
-    #                 "The generator was not found in gen.csv."
-    #             )
-
-    #         unit_type = gen_uid_to_type[gen_name]
-
-    #         if gen_name.endswith("-c"):
-    #             candidate_type = candidate_unit_type_to_plot_type.get(unit_type)
-    #             if candidate_type in GEN_TYPES:
-    #                 return candidate_type
-
-    #         plot_type = unit_type_to_plot_type.get(unit_type)
-
-    #         if plot_type in GEN_TYPES:
-    #             return plot_type
-
-    #         raise RuntimeError(
-    #             f"Cannot map generator '{gen_name}' with Unit Type "
-    #             f"'{unit_type}' to a supported stackgraph type."
-    #         )
-
-    #     def validate_storage_name(storage_name):
-    #         """Validate storage name using storage.csv when available."""
-    #         if not storage_uid_to_type:
-    #             return
-
-    #         storage_name = str(storage_name)
-
-    #         if storage_name not in storage_uid_to_type:
-    #             raise RuntimeError(
-    #                 f"Cannot map storage asset '{storage_name}' to a storage type. "
-    #                 "The storage asset was not found in storage.csv."
-    #             )
-
-    #     generation = {}
-    #     for g, val in gen_data.items():
-    #         stage, period, commitment, dispatch, gen_name = parse_result_key(
-    #             g,
-    #             dispatch_required=True,
-    #         )
-
-    #         if stage not in generation:
-    #             generation[stage] = {}
-    #         stage_dict = generation[stage]
-
-    #         if period not in stage_dict:
-    #             stage_dict[period] = {}
-    #         period_dict = stage_dict[period]
-
-    #         if commitment not in period_dict:
-    #             commitment_dict = period_dict[commitment] = {}
-    #         else:
-    #             commitment_dict = period_dict[commitment]
-
-    #         if dispatch not in commitment_dict:
-    #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
-    #         dispatch_dict = commitment_dict[dispatch]
-
-    #         gen_type = get_generator_plot_type(gen_name)
-    #         dispatch_dict[gen_type] += val
-            
-    #     # generation = {}
-    #     # for g, val in gen_data.items():
-    #     #     c = list(pyo.ComponentUID(g)._cids)
-    #     #     _, (stage,) = c.pop(0)
-    #     #     if stage not in generation:
-    #     #         generation[stage] = {}
-    #     #     stage_dict = generation[stage]
-
-    #     #     _, (period,) = c.pop(0)
-    #     #     if period not in stage_dict:
-    #     #         stage_dict[period] = {}
-    #     #     period_dict = stage_dict[period]
-
-    #     #     _, (commitment,) = c.pop(0)
-    #     #     if commitment not in period_dict:
-    #     #         period_dict[commitment] = {}
-    #     #     commitment_dict = period_dict[commitment]
-
-    #     #     _, (dispatch,) = c.pop(0)
-    #     #     if dispatch not in commitment_dict:
-    #     #         commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
-    #     #     dispatch_dict = commitment_dict[dispatch]
-
-    #     #     # gen_name = c[-1][0]
-    #     #     # _type = None
-    #     #     # for gt in GEN_TYPES:
-    #     #     #     if gen_name.endswith(gt):
-    #     #     #         _type = gt
-    #     #     #         break
-    #     #     # if _type is None:
-    #     #     #     raise RuntimeError(f"Cannot map generator name '{gen_name}' to type")
-    #     #     # dispatch_dict[_type] += val
-    #     #     gen_name = c[-1][0]
-    #     #     gen_type = get_generator_plot_type(gen_name)
-    #     #     dispatch_dict[gen_type] += val
-            
-    #     # Add battery charging data to generation structure
-    #     for g, val in charging_data.items():
-    #         c = list(pyo.ComponentUID(g)._cids)
-    #         _, (stage,) = c.pop(0)
-    #         if stage not in generation:
-    #             generation[stage] = {}
-    #         stage_dict = generation[stage]
-
-    #         _, (period,) = c.pop(0)
-    #         if period not in stage_dict:
-    #             stage_dict[period] = {}
-    #         period_dict = stage_dict[period]
-
-    #         _, (commitment,) = c.pop(0)
-    #         if commitment not in period_dict:
-    #             period_dict[commitment] = {}
-    #         commitment_dict = period_dict[commitment]
-
-    #         _, (dispatch,) = c.pop(0)
-    #         if dispatch not in commitment_dict:
-    #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
-    #         dispatch_dict = commitment_dict[dispatch]
-
-    #         # dispatch_dict["battery_charge"] -= val
-    #         storage_name = c[-1][0]
-    #         validate_storage_name(storage_name)
-    #         dispatch_dict["battery_charge"] -= val
-
-    #     # Add battery discharging data to generation structure
-    #     # Per request, plot discharge as negative (below x-axis)
-    #     for g, val in discharging_data.items():
-    #         c = list(pyo.ComponentUID(g)._cids)
-    #         _, (stage,) = c.pop(0)
-    #         if stage not in generation:
-    #             generation[stage] = {}
-    #         stage_dict = generation[stage]
-
-    #         _, (period,) = c.pop(0)
-    #         if period not in stage_dict:
-    #             stage_dict[period] = {}
-    #         period_dict = stage_dict[period]
-
-    #         _, (commitment,) = c.pop(0)
-    #         if commitment not in period_dict:
-    #             period_dict[commitment] = {}
-    #         commitment_dict = period_dict[commitment]
-
-    #         _, (dispatch,) = c.pop(0)
-    #         if dispatch not in commitment_dict:
-    #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
-    #         dispatch_dict = commitment_dict[dispatch]
-
-    #         # dispatch_dict["battery_discharge"] += val
-    #         storage_name = c[-1][0]
-    #         validate_storage_name(storage_name)
-    #         dispatch_dict["battery_discharge"] += val
-            
-    #     # print("\n[DEBUG] Storage summary from JSON inputs")
-
-    #     total_charging = sum(charging_data.values())
-    #     total_discharging = sum(discharging_data.values())
-
-    #     # print(f"[DEBUG] Total charging (raw): {total_charging:,.3f}")
-    #     # print(f"[DEBUG] Total discharging (raw): {total_discharging:,.3f}")
-
-    #     charging_by_suffix = defaultdict(float)
-    #     for g, val in charging_data.items():
-    #         name = g.split(".")[-1]
-    #         if name.endswith("_battery"):
-    #             charging_by_suffix["battery"] += val
-    #         elif name.endswith("_ps"):
-    #             charging_by_suffix["ps"] += val
-    #         else:
-    #             charging_by_suffix["other"] += val
-
-    #     discharging_by_suffix = defaultdict(float)
-    #     for g, val in discharging_data.items():
-    #         name = g.split(".")[-1]
-    #         if name.endswith("_battery"):
-    #             discharging_by_suffix["battery"] += val
-    #         elif name.endswith("_ps"):
-    #             discharging_by_suffix["ps"] += val
-    #         else:
-    #             discharging_by_suffix["other"] += val
-
-    #     # print("[DEBUG] Charging by storage type suffix:")
-    #     # for k, v in charging_by_suffix.items():
-    #     #     print(f"    {k}: {v:,.3f}")
-
-    #     # print("[DEBUG] Discharging by storage type suffix:")
-    #     # for k, v in discharging_by_suffix.items():
-    #     #     print(f"    {k}: {v:,.3f}")
-
-    #     time_periods = [
-    #         (s, p, c, d)
-    #         for s in generation
-    #         for p in generation[s]
-    #         for c in generation[s][p]
-    #         for d in generation[s][p][c]
-    #     ]
-    #     times = list(range(len(time_periods)))
-
-    #     loads = {}
-    #     for g, val in loads_data.items():
-    #         c = list(pyo.ComponentUID(g)._cids)
-    #         _, (stage,) = c.pop(0)
-    #         if stage not in loads:
-    #             loads[stage] = {}
-    #         stage_dict = loads[stage]
-    #         _, (period,) = c.pop(0)
-    #         if period not in stage_dict:
-    #             stage_dict[period] = {}
-    #         period_dict = stage_dict[period]
-    #         _, (commitment,) = c.pop(0)
-    #         if commitment not in period_dict:
-    #             period_dict[commitment] = 0
-    #         period_dict[commitment] += val  # Sum all buses for this time period
-
-    #     loads_trace = []
-    #     for s, p, c, d in time_periods:
-    #         try:
-    #             total_load = loads[s][p][c]
-    #         except KeyError:
-    #             total_load = 0
-    #         loads_trace.append(total_load)
-
-    #     # Build load_shed dict: sum all buses for each (stage, period, commitment)
-    #     load_shed = {}
-    #     for g, val in load_shed_data.items():
-    #         c = list(pyo.ComponentUID(g)._cids)
-    #         _, (stage,) = c.pop(0)
-    #         if stage not in load_shed:
-    #             load_shed[stage] = {}
-    #         stage_dict = load_shed[stage]
-    #         _, (period,) = c.pop(0)
-    #         if period not in stage_dict:
-    #             stage_dict[period] = {}
-    #         period_dict = stage_dict[period]
-    #         _, (commitment,) = c.pop(0)
-    #         if commitment not in period_dict:
-    #             period_dict[commitment] = 0
-    #         period_dict[commitment] += val  # Sum all buses for this time period
-
-    #     # Build load_shed_trace to match time_periods (repeat for each dispatch)
-    #     load_shed_trace = []
-    #     for s, p, c, d in time_periods:
-    #         try:
-    #             total_shed = load_shed[s][p][c]
-    #         except KeyError:
-    #             total_shed = 0
-    #         load_shed_trace.append(total_shed)
-    #     # print(load_shed_trace)
-
-    #     HATCH_TO_PATTERN = {
-    #         "": "",  # solid fill
-    #         "....": ".",  # dots
-    #         "////": "/",  # slashes
-    #         "xxxx": "x",  # crosshatch
-    #     }
-
-    #     def plotly_stackgraph(
-    #         times,
-    #         time_periods,
-    #         generation,
-    #         GEN_TYPES,
-    #         GEN_TYPE_ALIASES,
-    #         GEN_TYPE_HATCHES,
-    #         HATCH_TO_PATTERN,
-    #         results_path,
-    #     ):
-    #         """This function creates an interactive Plotly stackgraph
-    #         for given representative days.  Each bar represents one
-    #         hour in one representative day. The x-axis is labeled with
-    #         the representative day and hour (shown at hour 0 and 12).
-
-    #         """
-
-    #         n_hours_per_day = 24
-    #         n_rep_days = len(rep_days)
-    #         n_points = n_hours_per_day * n_rep_days
-
-    #         # Convert the rep_days strings to pandas Timestamps for
-    #         # formatting
-    #         rep_days_dt = [pd.to_datetime(d) for d in rep_days]
-
-    #         # Build x-axis labels and tick positions: For each hour
-    #         # in each representative day, create a label.  Only show
-    #         # the label for hour 0 and hour 12 of each day, leave
-    #         # others blank for clarity.
-    #         x_labels = []
-    #         tickvals = []
-    #         ticktext = []
-    #         for i, day in enumerate(rep_days_dt):
-    #             for h in range(n_hours_per_day):
-    #                 idx = i * n_hours_per_day + h  # Position in the x-axis
-    #                 if h == 0:
-    #                     label = day.strftime("%b-%d 00:00")
-    #                     x_labels.append(label)
-    #                     tickvals.append(idx)
-    #                     ticktext.append(label)
-    #                 elif h == 12:
-    #                     label = day.strftime("%b-%d 12:00")
-    #                     x_labels.append(label)
-    #                     tickvals.append(idx)
-    #                     ticktext.append(label)
-    #                 else:
-    #                     x_labels.append("")
-
-    #         # The x-axis for the bars is just integer positions (0 to n_points-1)
-    #         times = list(range(n_points))
-
-    #         # Prepare traces for each generator type
-    #         traces = []
-    #         for name, color in GEN_TYPES.items():
-    #             label = GEN_TYPE_ALIASES.get(name, name)
-    #             # One value per hour, for all representative days
-    #             values = np.array(
-    #                 [generation[s][p][c][d][name] for s, p, c, d in time_periods]
-    #             )
-    #             hatch = GEN_TYPE_HATCHES.get(name, "")
-    #             pattern_shape = HATCH_TO_PATTERN.get(hatch, "")
-    #             # Use lower opacity for candidate types (those with a
-    #             # hatch)
-    #             opacity = 0.7 if hatch else 1.0
-
-    #             traces.append(
-    #                 go.Bar(
-    #                     x=times,  # integer positions for each hour
-    #                     y=values,
-    #                     name=label,
-    #                     marker_color=color,
-    #                     marker_pattern_shape=pattern_shape,
-    #                     opacity=opacity,
-    #                     marker_line_width=0,  # remove white line
-    #                 )
-    #             )
-    #         # Add load shed as a stacked bar
-    #         tab20 = plt.get_cmap("tab20")
-    #         traces.append(
-    #             go.Bar(
-    #                 x=times,
-    #                 y=load_shed_trace,
-    #                 name="Load Shed",
-    #                 marker_color=mcolors.to_hex(tab20(7)),
-    #                 opacity=0.7,
-    #                 marker_line_width=0,
-    #             )
-    #         )
-    #         fig = go.Figure(data=traces)
-    #         fig.add_trace(
-    #             go.Scatter(
-    #                 x=times,
-    #                 y=loads_trace,
-    #                 mode="lines+markers",
-    #                 name="Total Load",
-    #                 line=dict(color="black", width=3, dash="dash"),
-    #                 marker=dict(size=4, color="black"),
-    #                 showlegend=True,
-    #             )
-    #         )
-    #         # fig.add_trace(
-    #         #     go.Scatter(
-    #         #         x=times,
-    #         #         y=load_shed_trace,
-    #         #         mode="lines+markers",
-    #         #         name="Load Shed",
-    #         #         line=dict(color="red", width=3, dash="dot"),
-    #         #         marker=dict(size=4, color="magenta"),
-    #         #         showlegend=True,
-    #         #     )
-    #         # )
-    #         fig.update_layout(
-    #             barmode="relative",
-    #             bargap=0,  # remove white spacing between bars
-    #             title="Generation Mix (Representative Days)",
-    #             xaxis=dict(
-    #                 # title="Hours",
-    #                 title="Representative Days (labeled every 12 hours)",
-    #                 tickvals=tickvals,  # show ticks at hour 0 and 12 of each rep day
-    #                 ticktext=ticktext,  # show corresponding label
-    #                 showgrid=True,
-    #                 gridcolor="gray",
-    #                 gridwidth=0.7,
-    #                 linecolor="black",
-    #                 mirror=True,
-    #             ),
-    #             yaxis=dict(
-    #                 title="Nameplate Capacity [MW]",
-    #                 showgrid=True,
-    #                 gridcolor="gray",
-    #                 gridwidth=0.7,
-    #                 linecolor="black",
-    #                 mirror=True,
-    #             ),
-    #             legend=dict(
-    #                 yanchor="middle",
-    #                 y=0.5,
-    #                 xanchor="left",
-    #                 x=1.02,
-    #                 font=dict(size=14),
-    #                 title="Generation Type",
-    #             ),
-    #             width=1200,
-    #             height=600,
-    #             plot_bgcolor="white",
-    #             paper_bgcolor="white",
-    #         )
-
-    #         # Add vertical lines to visually separate each
-    #         # representative day
-    #         for i in range(1, n_rep_days):
-    #             fig.add_vline(
-    #                 x=i * n_hours_per_day,
-    #                 line=dict(color="gray", width=1, dash="dot"),
-    #                 opacity=0.5,
-    #             )
-
-    #         # Add a little space above the tallest bar
-    #         all_series = {
-    #             name: np.array(
-    #                 [generation[s][p][c][d][name] for s, p, c, d in time_periods]
-    #             )
-    #             for name in GEN_TYPES
-    #         }
-
-    #         positive_stack = np.sum(
-    #             [np.clip(vals, 0, None) for vals in all_series.values()],
-    #             axis=0,
-    #         )
-    #         negative_stack = np.sum(
-    #             [np.clip(vals, None, 0) for vals in all_series.values()],
-    #             axis=0,
-    #         )
-
-    #         ymin = negative_stack.min() if len(negative_stack) else 0
-    #         ymax = positive_stack.max() if len(positive_stack) else 0
-
-    #         if loads_trace:
-    #             ymax = max(ymax, max(loads_trace))
-
-    #         lower = ymin * 1.25 if ymin < 0 else -1
-    #         upper = ymax * 1.25 if ymax > 0 else 1
-
-    #         fig.update_yaxes(
-    #             range=[lower, upper],
-    #             zeroline=True,
-    #             zerolinewidth=2,
-    #             zerolinecolor="black",
-    #         )
-
-    #         # Save as interactive HTML
-    #         plot_path = f"{results_path}/plots/stackgraph_generators_interactive.html"
-    #         fig.write_html(f"{plot_path}")
-    #         print(f" -> Saved interactive stackgraph to {plot_path}")
-
-    #         # print("\n[DEBUG] First 10 plotted values by type:")
-    #         # for name in ["battery_charge", "battery_discharge"]:
-    #         #     values = np.array(
-    #         #         [generation[s][p][c][d][name] for s, p, c, d in time_periods]
-    #         #     )
-    #         #     print(f"[DEBUG] {name}: {values[:10]}")
+        # def create_stackgraph_and_metrics(self, results_path, rep_days, day_hour_list):
+
+        #     try:
+        #         import ujson as json
+        #     except ImportError:
+        #         import json
+
+        #     with open(f"{results_path}/generation.json", "r") as F:
+        #         gen_data = json.load(F)
+
+        #     with open(f"{results_path}/loads.json", "r") as f:
+        #         loads_data = json.load(f)
+
+        #     with open(f"{results_path}/load_shed.json", "r") as f:
+        #         load_shed_data = json.load(f)
+
+        #     with open(f"{results_path}/reserves.json", "r") as f:
+        #         reserves_data = json.load(f)
+
+        #     with open(f"{results_path}/charging.json", "r") as f:
+        #         charging_data = json.load(f)
+
+        #     with open(f"{results_path}/discharging.json", "r") as f:
+        #         discharging_data = json.load(f)
+
+        #     def parse_result_key(key, dispatch_required=False):
+        #         """Parse saved result key into time indices and asset name.
+
+        #         This avoids using pyo.ComponentUID because saved JSON keys
+        #         are constructed strings and may contain asset names that are
+        #         not valid ComponentUID strings.
+        #         """
+
+        #         def get_index(component_name, required=True):
+        #             match = re.search(rf"{component_name}\[([^\]]+)\]", key)
+
+        #             if match is None:
+        #                 if required:
+        #                     raise RuntimeError(
+        #                         f"Could not find {component_name} index in key: {key}"
+        #                     )
+        #                 return None
+
+        #             value = match.group(1).strip("'\"")
+
+        #             try:
+        #                 return int(value)
+        #             except ValueError:
+        #                 return value
+
+        #         stage = get_index("investmentStage")
+        #         period = get_index("representativePeriod")
+        #         commitment = get_index("commitmentPeriod")
+        #         dispatch = get_index("dispatchPeriod", required=dispatch_required)
+
+        #         # Support keys saved as:
+        #         #   component.asset_name
+        #         # and keys saved as:
+        #         #   component[asset_name]
+        #         last_part = key.rsplit(".", 1)[-1]
+
+        #         if "[" in last_part and last_part.endswith("]"):
+        #             asset_name = last_part.split("[", 1)[1][:-1].strip("'\"")
+        #         else:
+        #             asset_name = last_part.strip("'\"")
+
+        #         return stage, period, commitment, dispatch, asset_name
+
+        #     # Note that these are the same colors used in the stack plots
+        #     # and pie charts above
+        #     def darken_color(hex_color, percent=0.2):
+        #         """Darken a hex color by a given percent (0.2 = 20%)"""
+        #         hex_color = hex_color.lstrip("#")
+        #         rgb = [int(hex_color[i : i + 2], 16) for i in (0, 2, 4)]
+        #         darker_rgb = [max(0, int(c * (1 - percent))) for c in rgb]
+        #         return "#" + "".join(f"{c:02x}" for c in darker_rgb)
+
+        #     tab20 = plt.get_cmap("tab20")
+        #     GEN_TYPES = {
+        #         "nuclear": mcolors.to_hex(tab20(2)),
+        #         "coal": mcolors.to_hex(tab20(5)),
+        #         "cc_gas": mcolors.to_hex(tab20(1)),
+        #         "ct_gas": mcolors.to_hex(tab20(3)),
+        #         "thermal_other": mcolors.to_hex(tab20(13)),
+        #         "steam": mcolors.to_hex(tab20(14)),
+        #         "solar": mcolors.to_hex(tab20(9)),
+        #         "wind": mcolors.to_hex(tab20(11)),
+        #         "hydro": mcolors.to_hex(tab20(19)),
+        #         "battery_discharge": mcolors.to_hex(tab20(15)),
+        #         "battery_charge": mcolors.to_hex(tab20(15)),
+        #         "ES4": mcolors.to_hex(tab20(17)),
+        #         "ps": mcolors.to_hex(tab20(19)),
+        #         "dr": mcolors.to_hex(tab20(18)),
+        #         # Candidates: 20% darker than original
+        #         "gas_cc-c": darken_color(mcolors.to_hex(tab20(1))),
+        #         "gas_ct-c": darken_color(mcolors.to_hex(tab20(3))),
+        #         "pv-c": darken_color(mcolors.to_hex(tab20(9))),
+        #         "wind-c": darken_color(mcolors.to_hex(tab20(11))),
+        #         "hydro-c": darken_color(mcolors.to_hex(tab20(19))),
+        #         "battery-c": darken_color(mcolors.to_hex(tab20(15))),
+        #         "ES4-c": darken_color(mcolors.to_hex(tab20(17))),
+        #         "ps-c": darken_color(mcolors.to_hex(tab20(19))),
+        #         "steam-c": darken_color(mcolors.to_hex(tab20(14))),
+        #     }
+        #     GEN_TYPE_HATCHES = {
+        #         # No hatch pattern for "original" types
+        #         "nuclear": "",
+        #         "coal": "",
+        #         "cc_gas": "",
+        #         "ct_gas": "",
+        #         "thermal_other": "",
+        #         "steam": "",
+        #         "solar": "",
+        #         "wind": "",
+        #         "hydro": "",
+        #         "battery_discharge": "",
+        #         "battery_charge": "",
+        #         "ES4": "",
+        #         "dr": "",
+        #         # Candidates get a hatch pattern
+        #         "gas_cc-c": "////",
+        #         "gas_ct-c": "////",
+        #         "steam-c": "////",
+        #         "pv-c": "////",
+        #         "wind-c": "////",
+        #         "hydro-c": "////",
+        #         "battery-c": "////",
+        #         "ES4-c": "////",
+        #     }
+        #     GEN_TYPE_ALIASES = {
+        #         "nuclear": "Nuclear",
+        #         "coal": "Coal",
+        #         "cc_gas": "CC",
+        #         "ct_gas": "CT",
+        #         "thermal_other": "Thermal",
+        #         "steam": "Steam",
+        #         "solar": "Solar",
+        #         "wind": "Wind",
+        #         "hydro": "Hydro",
+        #         "battery_charge": "Battery Charging",
+        #         "battery_discharge": "Battery Discharging",
+        #         "ES4": "ES4",
+        #         "dr": "DR",
+        #         "steam-c": "Steam (Candidate)",
+        #         "gas_cc-c": "CC (Candidate)",
+        #         "gas_ct-c": "CT (Candidate)",
+        #         "pv-c": "Solar (Candidate)",
+        #         "wind-c": "Wind (Candidate)",
+        #         "hydro-c": "Hydro (Candidate)",
+        #         "ES4-c": "ES4 (Candidate)",
+        #     }
+
+        #     # Map generator IDs to Unit Type using gen.csv. This avoids
+        #     # relying on the generator name ending with the unit type.
+        #     gen_uid_to_type = {
+        #         str(row["GEN UID"]): str(row["Unit Type"]).upper()
+        #         for _, row in self.gen_df.iterrows()
+        #     }
+
+        #     # Map storage IDs to storage type using storage.csv, if
+        #     # available. Storage charging/discharging is plotted using the
+        #     # artificial battery_charge and battery_discharge categories.
+        #     if hasattr(self, "storage_csv_path") and os.path.exists(self.storage_csv_path):
+        #         storage_uid_to_type = {
+        #             str(row["name"]): str(row["storage_type"]).upper()
+        #             for _, row in self.storage_df.iterrows()
+        #         }
+        #     else:
+        #         storage_uid_to_type = {}
+
+        #     # Map Unit Type values from gen.csv to the stackgraph plotting
+        #     # categories used in GEN_TYPES.
+        #     unit_type_to_plot_type = {
+        #         "CC": "cc_gas",
+        #         "CT": "ct_gas",
+        #         "COAL": "coal",
+        #         "NUC": "nuclear",
+        #         "NUCLEAR": "nuclear",
+        #         "PV": "solar",
+        #         "RTPV": "solar",
+        #         "SOLAR": "solar",
+        #         "WIND": "wind",
+        #         "HYDRO": "hydro",
+        #         "THERM": "thermal_other",
+        #         "THERMAL": "thermal_other",
+        #         "STEAM": "steam",
+        #         "ST": "steam",
+        #         "ES4": "ES4",
+        #         "DR": "dr",
+        #     }
+
+        #     # Candidate resources can be plotted separately when a
+        #     # matching candidate plotting category exists.
+        #     candidate_unit_type_to_plot_type = {
+        #         "CC": "gas_cc-c",
+        #         "CT": "gas_ct-c",
+        #         "PV": "pv-c",
+        #         "RTPV": "pv-c",
+        #         "SOLAR": "pv-c",
+        #         "WIND": "wind-c",
+        #         "HYDRO": "hydro-c",
+        #         "STEAM": "steam-c",
+        #         "ST": "steam-c",
+        #         "ES4": "ES4-c",
+        #         "BATTERY": "battery-c",
+        #         "PS": "ps-c",
+        #     }
+
+        #     def get_generator_plot_type(gen_name):
+        #         """Map generator name to stackgraph plotting type using gen.csv."""
+        #         gen_name = str(gen_name)
+
+        #         if gen_name not in gen_uid_to_type:
+        #             raise RuntimeError(
+        #                 f"Cannot map generator '{gen_name}' to a Unit Type. "
+        #                 "The generator was not found in gen.csv."
+        #             )
+
+        #         unit_type = gen_uid_to_type[gen_name]
+
+        #         if gen_name.endswith("-c"):
+        #             candidate_type = candidate_unit_type_to_plot_type.get(unit_type)
+        #             if candidate_type in GEN_TYPES:
+        #                 return candidate_type
+
+        #         plot_type = unit_type_to_plot_type.get(unit_type)
+
+        #         if plot_type in GEN_TYPES:
+        #             return plot_type
+
+        #         raise RuntimeError(
+        #             f"Cannot map generator '{gen_name}' with Unit Type "
+        #             f"'{unit_type}' to a supported stackgraph type."
+        #         )
+
+        #     def validate_storage_name(storage_name):
+        #         """Validate storage name using storage.csv when available."""
+        #         if not storage_uid_to_type:
+        #             return
+
+        #         storage_name = str(storage_name)
+
+        #         if storage_name not in storage_uid_to_type:
+        #             raise RuntimeError(
+        #                 f"Cannot map storage asset '{storage_name}' to a storage type. "
+        #                 "The storage asset was not found in storage.csv."
+        #             )
+
+        #     generation = {}
+        #     for g, val in gen_data.items():
+        #         stage, period, commitment, dispatch, gen_name = parse_result_key(
+        #             g,
+        #             dispatch_required=True,
+        #         )
+
+        #         if stage not in generation:
+        #             generation[stage] = {}
+        #         stage_dict = generation[stage]
+
+        #         if period not in stage_dict:
+        #             stage_dict[period] = {}
+        #         period_dict = stage_dict[period]
+
+        #         if commitment not in period_dict:
+        #             commitment_dict = period_dict[commitment] = {}
+        #         else:
+        #             commitment_dict = period_dict[commitment]
+
+        #         if dispatch not in commitment_dict:
+        #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
+        #         dispatch_dict = commitment_dict[dispatch]
+
+        #         gen_type = get_generator_plot_type(gen_name)
+        #         dispatch_dict[gen_type] += val
+
+        #     # generation = {}
+        #     # for g, val in gen_data.items():
+        #     #     c = list(pyo.ComponentUID(g)._cids)
+        #     #     _, (stage,) = c.pop(0)
+        #     #     if stage not in generation:
+        #     #         generation[stage] = {}
+        #     #     stage_dict = generation[stage]
+
+        #     #     _, (period,) = c.pop(0)
+        #     #     if period not in stage_dict:
+        #     #         stage_dict[period] = {}
+        #     #     period_dict = stage_dict[period]
+
+        #     #     _, (commitment,) = c.pop(0)
+        #     #     if commitment not in period_dict:
+        #     #         period_dict[commitment] = {}
+        #     #     commitment_dict = period_dict[commitment]
+
+        #     #     _, (dispatch,) = c.pop(0)
+        #     #     if dispatch not in commitment_dict:
+        #     #         commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
+        #     #     dispatch_dict = commitment_dict[dispatch]
+
+        #     #     # gen_name = c[-1][0]
+        #     #     # _type = None
+        #     #     # for gt in GEN_TYPES:
+        #     #     #     if gen_name.endswith(gt):
+        #     #     #         _type = gt
+        #     #     #         break
+        #     #     # if _type is None:
+        #     #     #     raise RuntimeError(f"Cannot map generator name '{gen_name}' to type")
+        #     #     # dispatch_dict[_type] += val
+        #     #     gen_name = c[-1][0]
+        #     #     gen_type = get_generator_plot_type(gen_name)
+        #     #     dispatch_dict[gen_type] += val
+
+        #     # Add battery charging data to generation structure
+        #     for g, val in charging_data.items():
+        #         c = list(pyo.ComponentUID(g)._cids)
+        #         _, (stage,) = c.pop(0)
+        #         if stage not in generation:
+        #             generation[stage] = {}
+        #         stage_dict = generation[stage]
+
+        #         _, (period,) = c.pop(0)
+        #         if period not in stage_dict:
+        #             stage_dict[period] = {}
+        #         period_dict = stage_dict[period]
+
+        #         _, (commitment,) = c.pop(0)
+        #         if commitment not in period_dict:
+        #             period_dict[commitment] = {}
+        #         commitment_dict = period_dict[commitment]
+
+        #         _, (dispatch,) = c.pop(0)
+        #         if dispatch not in commitment_dict:
+        #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
+        #         dispatch_dict = commitment_dict[dispatch]
+
+        #         # dispatch_dict["battery_charge"] -= val
+        #         storage_name = c[-1][0]
+        #         validate_storage_name(storage_name)
+        #         dispatch_dict["battery_charge"] -= val
+
+        #     # Add battery discharging data to generation structure
+        #     # Per request, plot discharge as negative (below x-axis)
+        #     for g, val in discharging_data.items():
+        #         c = list(pyo.ComponentUID(g)._cids)
+        #         _, (stage,) = c.pop(0)
+        #         if stage not in generation:
+        #             generation[stage] = {}
+        #         stage_dict = generation[stage]
+
+        #         _, (period,) = c.pop(0)
+        #         if period not in stage_dict:
+        #             stage_dict[period] = {}
+        #         period_dict = stage_dict[period]
+
+        #         _, (commitment,) = c.pop(0)
+        #         if commitment not in period_dict:
+        #             period_dict[commitment] = {}
+        #         commitment_dict = period_dict[commitment]
+
+        #         _, (dispatch,) = c.pop(0)
+        #         if dispatch not in commitment_dict:
+        #             commitment_dict[dispatch] = dict.fromkeys(GEN_TYPES, 0)
+        #         dispatch_dict = commitment_dict[dispatch]
+
+        #         # dispatch_dict["battery_discharge"] += val
+        #         storage_name = c[-1][0]
+        #         validate_storage_name(storage_name)
+        #         dispatch_dict["battery_discharge"] += val
+
+        #     # print("\n[DEBUG] Storage summary from JSON inputs")
+
+        #     total_charging = sum(charging_data.values())
+        #     total_discharging = sum(discharging_data.values())
+
+        #     # print(f"[DEBUG] Total charging (raw): {total_charging:,.3f}")
+        #     # print(f"[DEBUG] Total discharging (raw): {total_discharging:,.3f}")
+
+        #     charging_by_suffix = defaultdict(float)
+        #     for g, val in charging_data.items():
+        #         name = g.split(".")[-1]
+        #         if name.endswith("_battery"):
+        #             charging_by_suffix["battery"] += val
+        #         elif name.endswith("_ps"):
+        #             charging_by_suffix["ps"] += val
+        #         else:
+        #             charging_by_suffix["other"] += val
+
+        #     discharging_by_suffix = defaultdict(float)
+        #     for g, val in discharging_data.items():
+        #         name = g.split(".")[-1]
+        #         if name.endswith("_battery"):
+        #             discharging_by_suffix["battery"] += val
+        #         elif name.endswith("_ps"):
+        #             discharging_by_suffix["ps"] += val
+        #         else:
+        #             discharging_by_suffix["other"] += val
+
+        #     # print("[DEBUG] Charging by storage type suffix:")
+        #     # for k, v in charging_by_suffix.items():
+        #     #     print(f"    {k}: {v:,.3f}")
+
+        #     # print("[DEBUG] Discharging by storage type suffix:")
+        #     # for k, v in discharging_by_suffix.items():
+        #     #     print(f"    {k}: {v:,.3f}")
+
+        #     time_periods = [
+        #         (s, p, c, d)
+        #         for s in generation
+        #         for p in generation[s]
+        #         for c in generation[s][p]
+        #         for d in generation[s][p][c]
+        #     ]
+        #     times = list(range(len(time_periods)))
+
+        #     loads = {}
+        #     for g, val in loads_data.items():
+        #         c = list(pyo.ComponentUID(g)._cids)
+        #         _, (stage,) = c.pop(0)
+        #         if stage not in loads:
+        #             loads[stage] = {}
+        #         stage_dict = loads[stage]
+        #         _, (period,) = c.pop(0)
+        #         if period not in stage_dict:
+        #             stage_dict[period] = {}
+        #         period_dict = stage_dict[period]
+        #         _, (commitment,) = c.pop(0)
+        #         if commitment not in period_dict:
+        #             period_dict[commitment] = 0
+        #         period_dict[commitment] += val  # Sum all buses for this time period
+
+        #     loads_trace = []
+        #     for s, p, c, d in time_periods:
+        #         try:
+        #             total_load = loads[s][p][c]
+        #         except KeyError:
+        #             total_load = 0
+        #         loads_trace.append(total_load)
+
+        #     # Build load_shed dict: sum all buses for each (stage, period, commitment)
+        #     load_shed = {}
+        #     for g, val in load_shed_data.items():
+        #         c = list(pyo.ComponentUID(g)._cids)
+        #         _, (stage,) = c.pop(0)
+        #         if stage not in load_shed:
+        #             load_shed[stage] = {}
+        #         stage_dict = load_shed[stage]
+        #         _, (period,) = c.pop(0)
+        #         if period not in stage_dict:
+        #             stage_dict[period] = {}
+        #         period_dict = stage_dict[period]
+        #         _, (commitment,) = c.pop(0)
+        #         if commitment not in period_dict:
+        #             period_dict[commitment] = 0
+        #         period_dict[commitment] += val  # Sum all buses for this time period
+
+        #     # Build load_shed_trace to match time_periods (repeat for each dispatch)
+        #     load_shed_trace = []
+        #     for s, p, c, d in time_periods:
+        #         try:
+        #             total_shed = load_shed[s][p][c]
+        #         except KeyError:
+        #             total_shed = 0
+        #         load_shed_trace.append(total_shed)
+        #     # print(load_shed_trace)
+
+        #     HATCH_TO_PATTERN = {
+        #         "": "",  # solid fill
+        #         "....": ".",  # dots
+        #         "////": "/",  # slashes
+        #         "xxxx": "x",  # crosshatch
+        #     }
+
+        #     def plotly_stackgraph(
+        #         times,
+        #         time_periods,
+        #         generation,
+        #         GEN_TYPES,
+        #         GEN_TYPE_ALIASES,
+        #         GEN_TYPE_HATCHES,
+        #         HATCH_TO_PATTERN,
+        #         results_path,
+        #     ):
+        #         """This function creates an interactive Plotly stackgraph
+        #         for given representative days.  Each bar represents one
+        #         hour in one representative day. The x-axis is labeled with
+        #         the representative day and hour (shown at hour 0 and 12).
+
+        #         """
+
+        #         n_hours_per_day = 24
+        #         n_rep_days = len(rep_days)
+        #         n_points = n_hours_per_day * n_rep_days
+
+        #         # Convert the rep_days strings to pandas Timestamps for
+        #         # formatting
+        #         rep_days_dt = [pd.to_datetime(d) for d in rep_days]
+
+        #         # Build x-axis labels and tick positions: For each hour
+        #         # in each representative day, create a label.  Only show
+        #         # the label for hour 0 and hour 12 of each day, leave
+        #         # others blank for clarity.
+        #         x_labels = []
+        #         tickvals = []
+        #         ticktext = []
+        #         for i, day in enumerate(rep_days_dt):
+        #             for h in range(n_hours_per_day):
+        #                 idx = i * n_hours_per_day + h  # Position in the x-axis
+        #                 if h == 0:
+        #                     label = day.strftime("%b-%d 00:00")
+        #                     x_labels.append(label)
+        #                     tickvals.append(idx)
+        #                     ticktext.append(label)
+        #                 elif h == 12:
+        #                     label = day.strftime("%b-%d 12:00")
+        #                     x_labels.append(label)
+        #                     tickvals.append(idx)
+        #                     ticktext.append(label)
+        #                 else:
+        #                     x_labels.append("")
+
+        #         # The x-axis for the bars is just integer positions (0 to n_points-1)
+        #         times = list(range(n_points))
+
+        #         # Prepare traces for each generator type
+        #         traces = []
+        #         for name, color in GEN_TYPES.items():
+        #             label = GEN_TYPE_ALIASES.get(name, name)
+        #             # One value per hour, for all representative days
+        #             values = np.array(
+        #                 [generation[s][p][c][d][name] for s, p, c, d in time_periods]
+        #             )
+        #             hatch = GEN_TYPE_HATCHES.get(name, "")
+        #             pattern_shape = HATCH_TO_PATTERN.get(hatch, "")
+        #             # Use lower opacity for candidate types (those with a
+        #             # hatch)
+        #             opacity = 0.7 if hatch else 1.0
+
+        #             traces.append(
+        #                 go.Bar(
+        #                     x=times,  # integer positions for each hour
+        #                     y=values,
+        #                     name=label,
+        #                     marker_color=color,
+        #                     marker_pattern_shape=pattern_shape,
+        #                     opacity=opacity,
+        #                     marker_line_width=0,  # remove white line
+        #                 )
+        #             )
+        #         # Add load shed as a stacked bar
+        #         tab20 = plt.get_cmap("tab20")
+        #         traces.append(
+        #             go.Bar(
+        #                 x=times,
+        #                 y=load_shed_trace,
+        #                 name="Load Shed",
+        #                 marker_color=mcolors.to_hex(tab20(7)),
+        #                 opacity=0.7,
+        #                 marker_line_width=0,
+        #             )
+        #         )
+        #         fig = go.Figure(data=traces)
+        #         fig.add_trace(
+        #             go.Scatter(
+        #                 x=times,
+        #                 y=loads_trace,
+        #                 mode="lines+markers",
+        #                 name="Total Load",
+        #                 line=dict(color="black", width=3, dash="dash"),
+        #                 marker=dict(size=4, color="black"),
+        #                 showlegend=True,
+        #             )
+        #         )
+        #         # fig.add_trace(
+        #         #     go.Scatter(
+        #         #         x=times,
+        #         #         y=load_shed_trace,
+        #         #         mode="lines+markers",
+        #         #         name="Load Shed",
+        #         #         line=dict(color="red", width=3, dash="dot"),
+        #         #         marker=dict(size=4, color="magenta"),
+        #         #         showlegend=True,
+        #         #     )
+        #         # )
+        #         fig.update_layout(
+        #             barmode="relative",
+        #             bargap=0,  # remove white spacing between bars
+        #             title="Generation Mix (Representative Days)",
+        #             xaxis=dict(
+        #                 # title="Hours",
+        #                 title="Representative Days (labeled every 12 hours)",
+        #                 tickvals=tickvals,  # show ticks at hour 0 and 12 of each rep day
+        #                 ticktext=ticktext,  # show corresponding label
+        #                 showgrid=True,
+        #                 gridcolor="gray",
+        #                 gridwidth=0.7,
+        #                 linecolor="black",
+        #                 mirror=True,
+        #             ),
+        #             yaxis=dict(
+        #                 title="Nameplate Capacity [MW]",
+        #                 showgrid=True,
+        #                 gridcolor="gray",
+        #                 gridwidth=0.7,
+        #                 linecolor="black",
+        #                 mirror=True,
+        #             ),
+        #             legend=dict(
+        #                 yanchor="middle",
+        #                 y=0.5,
+        #                 xanchor="left",
+        #                 x=1.02,
+        #                 font=dict(size=14),
+        #                 title="Generation Type",
+        #             ),
+        #             width=1200,
+        #             height=600,
+        #             plot_bgcolor="white",
+        #             paper_bgcolor="white",
+        #         )
+
+        #         # Add vertical lines to visually separate each
+        #         # representative day
+        #         for i in range(1, n_rep_days):
+        #             fig.add_vline(
+        #                 x=i * n_hours_per_day,
+        #                 line=dict(color="gray", width=1, dash="dot"),
+        #                 opacity=0.5,
+        #             )
+
+        #         # Add a little space above the tallest bar
+        #         all_series = {
+        #             name: np.array(
+        #                 [generation[s][p][c][d][name] for s, p, c, d in time_periods]
+        #             )
+        #             for name in GEN_TYPES
+        #         }
+
+        #         positive_stack = np.sum(
+        #             [np.clip(vals, 0, None) for vals in all_series.values()],
+        #             axis=0,
+        #         )
+        #         negative_stack = np.sum(
+        #             [np.clip(vals, None, 0) for vals in all_series.values()],
+        #             axis=0,
+        #         )
+
+        #         ymin = negative_stack.min() if len(negative_stack) else 0
+        #         ymax = positive_stack.max() if len(positive_stack) else 0
+
+        #         if loads_trace:
+        #             ymax = max(ymax, max(loads_trace))
+
+        #         lower = ymin * 1.25 if ymin < 0 else -1
+        #         upper = ymax * 1.25 if ymax > 0 else 1
+
+        #         fig.update_yaxes(
+        #             range=[lower, upper],
+        #             zeroline=True,
+        #             zerolinewidth=2,
+        #             zerolinecolor="black",
+        #         )
+
+        #         # Save as interactive HTML
+        #         plot_path = f"{results_path}/plots/stackgraph_generators_interactive.html"
+        #         fig.write_html(f"{plot_path}")
+        #         print(f" -> Saved interactive stackgraph to {plot_path}")
+
+        #         # print("\n[DEBUG] First 10 plotted values by type:")
+        #         # for name in ["battery_charge", "battery_discharge"]:
+        #         #     values = np.array(
+        #         #         [generation[s][p][c][d][name] for s, p, c, d in time_periods]
+        #         #     )
+        #         #     print(f"[DEBUG] {name}: {values[:10]}")
 
         def plot_generation_pie_chart(
             generation, time_periods, GEN_TYPES, GEN_TYPE_ALIASES, results_path

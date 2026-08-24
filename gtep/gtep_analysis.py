@@ -76,9 +76,7 @@ class ExpansionPlanningAnalysis:
         output_path = csv_path or self.csv_path
 
         if output_path is None:
-            raise ValueError(
-                "csv_path must be provided to save metrics to a CSV file."
-            )
+            raise ValueError("csv_path must be provided to save metrics to a CSV file.")
 
         metrics_df = pd.DataFrame(self.metrics_rows)
 
@@ -191,7 +189,9 @@ class ExpansionPlanningAnalysis:
         load_file = self._get_file_path("DAY_AHEAD_load.csv")
 
         if not os.path.exists(load_file):
-            raise FileNotFoundError(f"Could not find DAY_AHEAD_load.csv at: {load_file}")
+            raise FileNotFoundError(
+                f"Could not find DAY_AHEAD_load.csv at: {load_file}"
+            )
 
         load_df = pd.read_csv(load_file, nrows=1)
 
@@ -213,7 +213,9 @@ class ExpansionPlanningAnalysis:
         load_file = self._get_file_path("DAY_AHEAD_load.csv")
 
         if not os.path.exists(load_file):
-            raise FileNotFoundError(f"Could not find DAY_AHEAD_load.csv at: {load_file}")
+            raise FileNotFoundError(
+                f"Could not find DAY_AHEAD_load.csv at: {load_file}"
+            )
 
         load_df = pd.read_csv(load_file, usecols=["Year", "Month", "Day"])
         count = load_df[["Year", "Month", "Day"]].drop_duplicates().shape[0]
@@ -235,14 +237,12 @@ class ExpansionPlanningAnalysis:
         load_file = self._get_file_path("DAY_AHEAD_load.csv")
 
         if not os.path.exists(load_file):
-            raise FileNotFoundError(f"Could not find DAY_AHEAD_load.csv at: {load_file}")
+            raise FileNotFoundError(
+                f"Could not find DAY_AHEAD_load.csv at: {load_file}"
+            )
 
         load_df = pd.read_csv(load_file, usecols=["Year", "Month", "Day", "Period"])
-        count = (
-            load_df[["Year", "Month", "Day", "Period"]]
-            .drop_duplicates()
-            .shape[0]
-        )
+        count = load_df[["Year", "Month", "Day", "Period"]].drop_duplicates().shape[0]
 
         self._record_metric(
             metric="load_time_periods",
@@ -434,9 +434,9 @@ class ExpansionPlanningAnalysis:
             gen_name = key.rsplit(".", 1)[-1]
             unit_type = gen_uid_to_type.get(gen_name, "UNKNOWN")
 
-            generation_by_type_mw[unit_type] = (
-                generation_by_type_mw.get(unit_type, 0.0) + float(value)
-            )
+            generation_by_type_mw[unit_type] = generation_by_type_mw.get(
+                unit_type, 0.0
+            ) + float(value)
 
         generation_by_type_gwh = {
             unit_type: total_mw * hours_per_period / 1000

@@ -84,15 +84,15 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
     )
 
     _toBranches = defaultdict(list)
-    _fromBranches =  defaultdict(list)
+    _fromBranches = defaultdict(list)
     for branch, data in m.md.data["elements"]["branch"].items():
-        _toBranches[data['to_bus']].append(branch)
-        _fromBranches[data['from_bus']].append(branch)
+        _toBranches[data["to_bus"]].append(branch)
+        _fromBranches[data["from_bus"]].append(branch)
 
-    m.branchByToBus = pyo.Set(m.buses, initialize = _toBranches)
+    m.branchByToBus = pyo.Set(m.buses, initialize=_toBranches)
 
-    m.branchByFromBus = pyo.Set(m.buses, initialize = _fromBranches)
-    
+    m.branchByFromBus = pyo.Set(m.buses, initialize=_fromBranches)
+
     m.thermalGenerators = pyo.Set(
         within=m.generators,
         initialize=(
@@ -103,9 +103,9 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
         doc="Thermal generators; subset of all generators",
     )
 
-    m.thermalGeneratorsByBus = pyo.Set(m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.thermalGenerators)
-
-    
+    m.thermalGeneratorsByBus = pyo.Set(
+        m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.thermalGenerators
+    )
 
     if m.config["advanced_hydro"]:
 
@@ -119,7 +119,9 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
             doc="Hydropower generators; subset of all generators",
         )
 
-        m.hydroGeneratorsByBus = pyo.Set(m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.hydroGenerators)
+        m.hydroGeneratorsByBus = pyo.Set(
+            m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.hydroGenerators
+        )
 
         m.renewableGenerators = pyo.Set(
             within=m.generators,
@@ -148,7 +150,9 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
             doc="Renewable generators; subset of all generators",
         )
 
-    m.renewableGeneratorsByBus = pyo.Set(m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.renewableGenerators)
+    m.renewableGeneratorsByBus = pyo.Set(
+        m.buses, initialize=lambda m, b: m.generatorsByBus[b] & m.renewableGenerators
+    )
 
     m.load_buses = pyo.Set(initialize=[i for i in m.md.data["elements"]["load"]])
 

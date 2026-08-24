@@ -17,7 +17,6 @@ import logging
 from gtep.gtep_analysis import ExpansionPlanningAnalysis
 from gtep.gtep_solution import ExpansionPlanningSolution
 
-
 logger = logging.getLogger("gtep.driver_analysis")
 logger.setLevel(logging.INFO)
 

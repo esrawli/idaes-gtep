@@ -242,7 +242,6 @@ def run_monolithic(args: argparse.Namespace) -> MonolithicRunSummary:
         with timer.phase("extract_objective"):
             objective_value = get_active_objective_value(model_object.model)
 
-
         if sol_object is not None:
             with timer.phase("write_gtep_result_json_files"):
                 sol_object.save_results_in_json_files(
@@ -358,8 +357,12 @@ def _solver_summary(
         termination_condition = str(results.solver.termination_condition)
         message = str(getattr(results.solver, "message", None))
 
-    lower_bound = get_result_bound(results, "lower_bound") if results is not None else None
-    upper_bound = get_result_bound(results, "upper_bound") if results is not None else None
+    lower_bound = (
+        get_result_bound(results, "lower_bound") if results is not None else None
+    )
+    upper_bound = (
+        get_result_bound(results, "upper_bound") if results is not None else None
+    )
 
     return {
         "name": solver_name,
@@ -456,8 +459,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         type=float,
         default=1.0e-3,
         help=(
-            "Minimum variable value to save in GTEP result JSON files. "
-            "Default: 1e-3"
+            "Minimum variable value to save in GTEP result JSON files. " "Default: 1e-3"
         ),
     )
 
