@@ -32,6 +32,7 @@ from egret.data.model_data import ModelData
 
 curr_dir = Path(__file__).resolve().parent
 Texas123_case_path = (curr_dir / ".." / ".." / "data" / "123_Bus_Resil_Week").resolve()
+Bus9_case_path = (curr_dir / ".." / ".." / "data" / "9_bus_GTEP_dir").resolve()
 
 
 @pytest.fixture
@@ -716,5 +717,66 @@ class TestGTEP(unittest.TestCase):
         # self.assertAlmostEqual(
         #     value(modObject.model.total_cost_objective), 20105684865.29, places=1
         # )
+
+        assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
+
+    def test_Bus9_case(self):
+
+        modObject = create_model(
+            input_data_path=Bus9_case_path,
+            planning_data_args={
+                "stages": 2,
+                "num_reps": 4,
+                "num_commit": 4,
+                "num_dispatch": 2,
+                "duration_representative_period": 4,
+            },
+            prescient_data_args={
+                "representative_dates": [
+                    "2020-01-28 00:00",
+                    "2020-04-23 00:00",
+                    "2020-07-05 00:00",
+                    "2020-10-14 00:00",
+                ],
+                "representative_weights": {
+                    "2020-01-28 00:00": 105,
+                    "2020-04-23 00:00": 95,
+                    "2020-07-05 00:00": 85,
+                    "2020-10-14 00:00": 80,
+                },
+            },
+            config={
+                "include_investment": True,
+                "include_commitment": True,
+                "include_redispatch": True,
+                "scale_loads": False,
+                "transmission": True,
+                "storage": False,
+                "flow_model": "transport",
+            },
+            candidate_gens=[
+                "Natural Gas_CT",
+                "Natural Gas_FE",
+                "Solar - Utility PV",
+                "Land-Based Wind",
+            ],
+        )
+
+        # Check for consistent units
+        # Note: Need to do this check before applying the GDP transformations
+        assert_units_consistent(modObject.model)
+
+        opt = SolverFactory("highs")
+        if not opt.available():
+            raise unittest.SkipTest("Solver not available")
+
+        # Apply transformations to logical terms
+        TransformationFactory("gdp.bigm").apply_to(modObject.model)
+
+        modObject.results = opt.solve(modObject.model)
+
+        self.assertAlmostEqual(
+            value(modObject.model.total_cost_objective), 33071040627.4, places=1
+        )
 
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
