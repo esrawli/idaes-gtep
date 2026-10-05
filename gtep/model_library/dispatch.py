@@ -269,7 +269,9 @@ def add_dispatch_constraints(b):
 
     else:
 
-        @b.Constraint(m.buses, doc="Energy balance constraint")
+        # This flow balance equation corresponds to the "transport"
+        # flow_model configuration option.
+        @b.Constraint(m.buses, doc="Power balance constraint")
         def flow_balance(b, bus):
             balance = 0 * u.MW
             # Add power flow to constraint
