@@ -78,6 +78,7 @@ class ExpansionPlanningSolution:
         rt_solar = mcolors.to_hex(tab20(8))
         wind = mcolors.to_hex(tab20(11))
         thermal = mcolors.to_hex(tab20(13))
+        geothermal = mcolors.to_hex(tab20(12))
         steam = mcolors.to_hex(tab20(14))
         hydro = mcolors.to_hex(tab20(19))
         storage = mcolors.to_hex(tab20(15))
@@ -92,6 +93,7 @@ class ExpansionPlanningSolution:
             "RTPV": GenerationType("RT Solar", rt_solar),
             "WIND": GenerationType("Wind", wind),
             "THERMAL": GenerationType("Thermal", thermal),
+            "GEO": GenerationType("Geothermal", geothermal),
             "STEAM": GenerationType("Steam", steam),
             "HYDRO": GenerationType("Hydro", hydro),
             "BATTERY": GenerationType("Storage", storage),
