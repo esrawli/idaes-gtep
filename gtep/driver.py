@@ -106,8 +106,6 @@ if include_cost_data:
         cost_data_path,
         ng_cost_path,
         candidate_gens,
-        use_cost_from_data_files=False,
-        data_path=data_path,
     )
 else:
     data_processing_object = None
