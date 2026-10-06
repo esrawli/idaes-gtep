@@ -355,7 +355,7 @@ class DataProcessing:
         :param use_cost_from_data_files:    Select to use cost data from data file.
                                             Defaults to False.
         :param data_path:                   Data directory to read cost-related values.
-        
+
         :type bus_data_path:                pathlib.Path
         :type cost_data_path:               pathlib.Path
         :type ng_cost_path:                 pathlib.Path
