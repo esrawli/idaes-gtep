@@ -82,8 +82,8 @@ class DataProcessing:
 
     cost_var_names = {
         "capex": "CAPEX ($/kW)",
-        "fixed_ops": "Fixed Operation and Maintenance Expenses ($/kW-yr)",
-        "var_ops": "Variable Operation and Maintenance Expenses ($/MWh)",
+        "fixed_ops_cost": "Fixed Operation and Maintenance Expenses ($/kW-yr)",
+        "var_ops_cost": "Variable Operation and Maintenance Expenses ($/MWh)",
     }
     heat_rate_var = "Heat Rate  (MMBtu/MWh)"
 
@@ -245,7 +245,7 @@ class DataProcessing:
         gen: str,
     ) -> dict[str, Any]:
         """
-        Builds a row of cost data and adds it to `gen_data_target`, in-place. `ng_cost_df` and
+        Builds a row of cost data and adds it to `gen_cost_data`, in-place. `ng_cost_df` and
         `ng_cost_quantity` must be provided if `gen` contains the substring `"Natural Gas"`.
 
         :param gen_cost_df:                 Dataframe with cost data to be extracted.
@@ -327,10 +327,17 @@ class DataProcessing:
         ng_cost_quantity: str = "Reference case",
         save_csv: bool = False,
         out_path: Path | None = None,
+        use_cost_from_data_files: bool = False,
+        data_path=None,
     ):
-        """
-        Builds a dataframe containing cost data for generators of specified type from bus data.
-        Stores the result in `self.gen_data_target` and optionally writes to a CSV.
+        """Builds a dataframe containing cost data for generators of
+        specified type from bus data.  Stores the result in
+        `self.gen_cost_data` and optionally writes to a CSV.
+
+        If ``use_cost_from_data_files=True``, this method loads cost
+        data directly from ``gen.csv``, ``storage.csv``, and
+        ``branch.csv`` in the ``data/`` directory and skips the cost
+        workbook processing path.
 
         :param bus_data_path:               Path to bus data.
         :param cost_data_path:              Path to cost data.
@@ -338,9 +345,16 @@ class DataProcessing:
         :param candidate_gens:              Generator types to extract cost data for.
         :param years:                       Years to extract cost data for.
         :param scenario:                    Cost scenario. Defaults to `"Moderate"`.
-        :param ng_cost_quantity:            Natural gas cost quantity to use. Defaults to `"Reference case"`.
-        :param save_csv:                    Whether to save the resulting dataframe to csv. Defaults to `False`.
-        :param out_path:                    Directory to save the csv to. Defaults to `None`, but must be provided if `save_csv=True` is passed.
+        :param ng_cost_quantity:            Natural gas cost quantity to use. Defaults
+                                            to `"Reference case"`.
+        :param save_csv:                    Whether to save the resulting dataframe to
+                                            csv. Defaults to `False`.
+        :param out_path:                    Directory to save the csv to. Defaults to
+                                           `None`, but must be provided if
+                                            `save_csv=True` is passed.
+        :param use_cost_from_data_files:    Select to use cost data from data file.
+                                            Defaults to False.
+
         :type bus_data_path:                pathlib.Path
         :type cost_data_path:               pathlib.Path
         :type ng_cost_path:                 pathlib.Path
@@ -350,10 +364,100 @@ class DataProcessing:
         :type ng_cost_quantity:             str
         :type save_csv:                     bool
         :type out_path:                     pathlib.Path | None
+        :type use_cost_from_data_files:     bool
+
         """
+
         if save_csv and out_path is None:
             raise TypeError("With save_csv=True, out_path must be a provided.")
 
+        # If ``use_cost_from_data_files`` is True, load cost data
+        # directly from the case input files instead of rebuilding it
+        # from external cost data.  The function below checks required
+        # cost columns and stores each loaded file on the
+        # corresponding DataProcessing attribute.
+        def load_and_check_cost_csv(path, prefixes, cost_attr, required=False):
+            """This function loads cost data from case-input CSV files.
+
+            This function is used when cost data is already included
+            in the case input files, such as ``gen.csv``,
+            ``storage.csv``, or ``branch.csv``. It checks that the
+            file contains at least one column for each expected
+            cost-data prefix and stores the loaded dataframe on the
+            requested ``DataProcessing`` attribute.
+
+            :param prefixes:                List of required column prefixes.
+                                            Each prefix must match at least one
+                                            column in the file.
+            :param cost_attr:               Name of the ``DataProcessing`` attribute
+                                            where the loaded dataframe should be
+                                            stored.
+            :param required:                If True, raise ``FileNotFoundError``
+                                            when the file is missing. If False,
+                                            skip missing files.
+
+            """
+
+            logger.info("Loading cost data from existing file: %s", path)
+            df = pd.read_csv(path)
+
+            missing_cols = []
+            for prefix in prefixes:
+                if not any(col.startswith(prefix) for col in df.columns):
+                    missing_cols.append(f"{prefix}*")
+
+            if missing_cols:
+
+                logger.error(
+                    "Candidate cost data from '%s' cannot be loaded because "
+                    "required cost columns are missing: %s. Please set "
+                    "`use_cost_from_data_files` to False or add the required "
+                    "cost data to the corresponding gen.csv, storage.csv, "
+                    "or branch.csv file.",
+                    path.name,
+                    missing_cols,
+                )
+                raise ValueError(
+                    f"Missing required candidate cost columns in {path.name}: "
+                    f"{missing_cols}"
+                )
+
+            setattr(self, cost_attr, df)
+
+        if use_cost_from_data_files:
+            if data_path is None:
+                raise ValueError(
+                    "data_path must be provided when " "use_cost_from_data_files=True."
+                )
+
+            data_path = Path(data_path)
+
+            cost_prefixes = ["lifetime_", "capex_", "fixed_ops_cost_", "var_ops_cost_"]
+            res = load_and_check_cost_csv(
+                data_path / "gen.csv",
+                prefixes=["fuel_cost_"] + cost_prefixes,
+                cost_attr="gen_cost_from_csv_data",
+                required=True,
+            )
+            load_and_check_cost_csv(
+                data_path / "storage.csv",
+                prefixes=cost_prefixes,
+                cost_attr="storage_cost_from_csv_data",
+                required=False,
+            )
+            load_and_check_cost_csv(
+                data_path / "branch.csv",
+                prefixes=["lifetime_", "capex_"],
+                cost_attr="branch_cost_from_csv_data",
+                required=False,
+            )
+
+            return
+
+        # If ``use_cost_from_data_files`` is False, build candidate
+        # generator cost data from the external cost workbook,
+        # natural-gas cost file, and bus mapping file using the
+        # requested candidate generator types.
         gen_bus_df = self.get_gen_bus_data(bus_data_path)
 
         # get natural gas data and check we have the matching cost quantity and years
@@ -400,24 +504,24 @@ class DataProcessing:
                         ng_cost_quantity=ng_cost_quantity,
                     )
                 )
-        self.gen_data_target = self.fill_out_prescient_columns(pd.DataFrame(df_rows))
+        self.gen_cost_data = self.fill_out_prescient_columns(pd.DataFrame(df_rows))
 
         # Add converted cost columns using units expected by the GTEP
         # Pyomo parameters. Original cost columns are preserved.
         self.convert_cost_columns(years)
 
         if save_csv:
-            self.gen_data_target.to_csv((out_path / "costs.csv").resolve(), index=False)
+            self.gen_cost_data.to_csv((out_path / "costs.csv").resolve(), index=False)
 
     def convert_cost_columns(self, years):
         """This method converts cost columns to
-        ``self.gen_data_target`` to match the units expected by the
+        ``self.gen_cost_data`` to match the units expected by the
         GTEP model parameters. The converted costs have the following
         units:
 
-                fixed_cost_<year> = USD / MW hr
-                var_cost_<year> = USD / MW hr
-                investment_cost_<year> = USD / MW
+                fixed_ops_cost_<year> = USD / MW hr
+                var_ops_cost_<year> = USD / MW hr
+                capex_<year> = USD / MW
                 fuel_cost_<year> = USD / MW / hr
 
         """
@@ -437,25 +541,25 @@ class DataProcessing:
 
         for year in years:
             capex = pd.to_numeric(
-                self.gen_data_target[f"capex_{year}"],
+                self.gen_cost_data[f"capex_{year}"],
                 errors="coerce",
             ).fillna(0.0)
-            fixed_ops = pd.to_numeric(
-                self.gen_data_target[f"fixed_ops_{year}"],
+            fixed_ops_cost = pd.to_numeric(
+                self.gen_cost_data[f"fixed_ops_cost_{year}"],
                 errors="coerce",
             ).fillna(0.0)
-            var_ops = pd.to_numeric(
-                self.gen_data_target[f"var_ops_{year}"],
+            var_ops_cost = pd.to_numeric(
+                self.gen_cost_data[f"var_ops_cost_{year}"],
                 errors="coerce",
             ).fillna(0.0)
             fuel_costs = pd.to_numeric(
-                self.gen_data_target[f"fuel_costs_{year}"],
+                self.gen_cost_data[f"fuel_costs_{year}"],
                 errors="coerce",
             ).fillna(0.0)
 
-            self.gen_data_target[f"investment_cost_{year}"] = capex * inv_factor
-            self.gen_data_target[f"fixed_cost_{year}"] = fixed_ops * fixed_factor
-            self.gen_data_target[f"var_cost_{year}"] = var_ops
-            self.gen_data_target[f"fuel_cost_{year}"] = fuel_costs
+            self.gen_cost_data[f"capex_{year}"] = capex * inv_factor
+            self.gen_cost_data[f"fixed_ops_cost_{year}"] = fixed_ops_cost * fixed_factor
+            self.gen_cost_data[f"var_ops_cost_{year}"] = var_ops_cost
+            self.gen_cost_data[f"fuel_cost_{year}"] = fuel_costs
             # Assume fuel cost reactive is the same as fuel cost
-            self.gen_data_target[f"fuel_cost_reactive_{year}"] = fuel_costs
+            self.gen_cost_data[f"fuel_cost_reactive_{year}"] = fuel_costs
