@@ -328,7 +328,7 @@ class DataProcessing:
         save_csv: bool = False,
         out_path: Path | None = None,
         use_cost_from_data_files: bool = False,
-        data_path=None,
+        data_path: Path | None = None,
     ):
         """Builds a dataframe containing cost data for generators of
         specified type from bus data.  Stores the result in
