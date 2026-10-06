@@ -449,7 +449,7 @@ class DataProcessing:
             )
             load_and_check_cost_csv(
                 data_path / "branch.csv",
-                prefixes=["lifetime_", "capex_"],
+                prefixes=cost_prefixes,
                 cost_attr="branch_cost_from_csv_data",
                 required=False,
             )
