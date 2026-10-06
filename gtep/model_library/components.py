@@ -17,6 +17,7 @@ Planning (GTEP) Model
 """
 
 import logging
+import pandas as pd
 
 import pyomo.environ as pyo
 from pyomo.environ import units as u
@@ -240,7 +241,7 @@ def add_model_parameters(m):
             doc="Maximum output of each hydropower generator",
         )
 
-    m.lifetimes = pyo.Param(
+    m.generatorLifetime = pyo.Param(
         m.generators,
         initialize={
             gen: m.md.data["elements"]["generator"][gen]["lifetime"]
@@ -249,6 +250,14 @@ def add_model_parameters(m):
         mutable=True,
         units=u.year,
         doc="Lifetime of each generator",
+    )
+
+    m.branchLifetime = pyo.Param(
+        m.lines,
+        initialize={line: 3 for line in m.lines for line in m.lines},
+        mutable=True,
+        units=u.year,
+        doc="Lifetime of each branch",
     )
 
     m.thermalMin = pyo.Param(
@@ -379,9 +388,10 @@ def add_model_parameters(m):
         doc="Distance between terminal buses for each transmission line",
     )
 
-    # Initialize investment costs in each new transmission
-    # line. Currently selected the value of 0 to ensure investments
-    # will be selected, if needed.
+    # Initialize all costs in each transmission line. Investment cost
+    # will be 0 for existent branches and will have a value for new
+    # (candidate) branches. Also, we currently select the value of 0
+    # to ensure investments will be selected, if needed.
     m.branchInvestmentCost = pyo.Param(
         m.lines,
         initialize={
@@ -390,7 +400,23 @@ def add_model_parameters(m):
         },
         mutable=True,
         units=u.USD / u.MW,
-        doc="Investment cost for each new branch",
+        doc="Investment cost for each branch",
+    )
+
+    m.branchFixedCost = pyo.Param(
+        m.lines,
+        initialize={branch: 0 for branch in m.lines},
+        mutable=True,
+        units=u.USD / u.MW,
+        doc="Fixed cost for each branch",
+    )
+
+    m.branchVariableCost = pyo.Param(
+        m.lines,
+        initialize={branch: 0 for branch in m.lines},
+        mutable=True,
+        units=u.USD / u.MW,
+        doc="Variable cost for each branch",
     )
 
     # [JSC TODO: Add branch capital multiplier to input data.]
@@ -725,70 +751,108 @@ def repopulate_cost_parameters(m, year):
     selected year.
 
     Cost values are assumed to have already been converted in
-    DataProcessing and stored in ``m.mc.gen_data_target``. The units
+    DataProcessing and stored in ``m.mc.gen_cost_data``. The units
     required by the model parameters are:
 
-        fixed_cost_<year> = USD / MW hr
-        var_cost_<year> = USD / MW hr
-        investment_cost_<year> = USD / MW
+        fixed_ops_cost_<year> = USD / MW hr
+        var_ops_cost_<year> = USD / MW hr
+        capex_<year> = USD / MW
         fuel_cost_<year> = USD / MW / hr
+        fuel_reactive_cost_<year> = USD / MW / hr
 
     """
 
     if m.mc is None:
         logger.warning(
             "Cost data for year %s was not provided in m.mc."
-            " Keeping generator cost parameters to default values.",
+            " Keeping all generator and branch cost parameters"
+            " to default values.",
             year,
         )
         return
 
-    logger.info(
-        "Re-populating generator cost parameters (m.fuelCost,"
-        " m.generatorInvestmentCost, m.generatorFixedCost, and"
-        " m.generatorVariableCost) for year %s. Assigning NG CT"
-        " cost values to all thermal generators and solar PV "
-        " cost values to all renewable generators."
-    )
+    if hasattr(m.mc, "gen_cost_from_csv_data"):
+        logger.info(
+            "Re-populating generator and branch cost parameters"
+            " (investment, fixed, and variables costs) for year %s.",
+            year,
+        )
 
-    cost_df = m.mc.gen_data_target.copy()
-    cost_df["Unit Type"] = cost_df["Unit Type"].astype(str).str.upper()
+        for index, row in m.mc.branch_cost_from_csv_data.iterrows():
+            branch = row["UID"]
 
-    def get_cost_row_by_unit_type(gen):
-        """This function returns the converted cost row for a
-        generator by Unit Type.
+            # Read costs for the selected year
+            capex_yr = float(row[f"capex_{year}"])
+            fixed_ops_yr = float(row[f"fixed_ops_cost_{year}"])
+            var_ops_yr = float(row[f"var_ops_cost_{year}"])
+            m.branchInvestmentCost[branch] = capex_yr
+            m.branchFixedCost[branch] = fixed_ops_yr
+            m.branchVariableCost[branch] = var_ops_yr
 
-        """
+        for index, row in m.mc.gen_cost_from_csv_data.iterrows():
+            gen = row["GEN UID"]
 
-        gen_data = m.md.data["elements"]["generator"][gen]
+            # Read costs for the selected year
+            capex_yr = float(row[f"capex_{year}"])
+            fixed_ops_yr = float(row[f"fixed_ops_cost_{year}"])
+            var_ops_yr = float(row[f"var_ops_cost_{year}"])
+            m.generatorInvestmentCost[gen] = capex_yr
+            m.generatorFixedCost[gen] = fixed_ops_yr
+            m.generatorVariableCost[gen] = var_ops_yr
 
-        unit_type = str(gen_data.get("unit_type", "")).strip().upper()
-        generator_type = str(gen_data.get("generator_type", "")).strip().lower()
+            if gen in m.fuelCost:
+                m.fuelCost[gen] = float(row[f"fuel_cost_{year}"])
 
-        if generator_type == "renewable":
-            cost_unit_type = "PV"
-        elif generator_type == "thermal":
-            cost_unit_type = "CT"
-        else:
-            cost_unit_type = "CT"
+            if gen in m.fuelCostReactive:
+                m.fuelCostReactive[gen] = float(row[f"fuel_cost_{year}"])
 
-        cost_rows = cost_df[cost_df["Unit Type"] == cost_unit_type]
+    elif hasattr(m.mc, "gen_cost_data"):
 
-        return cost_rows.iloc[0]
+        logger.info(
+            "Re-populating generator cost parameters (m.fuelCost,"
+            " m.generatorInvestmentCost, m.generatorFixedCost, and"
+            " m.generatorVariableCost) for year %s. Assigning NG CT"
+            " cost values to all thermal generators and solar PV "
+            " cost values to all renewable generators."
+        )
 
-    for gen in m.generators:
+        cost_df = m.mc.gen_cost_data.copy()
+        cost_df["Unit Type"] = cost_df["Unit Type"].astype(str).str.upper()
 
-        row = get_cost_row_by_unit_type(gen)
+        def get_cost_row_by_unit_type(gen):
+            """This function returns the converted cost row for a
+            generator by Unit Type.
 
-        m.generatorFixedCost[gen] = float(row[f"fixed_cost_{year}"])
-        m.generatorVariableCost[gen] = float(row[f"var_cost_{year}"])
-        m.generatorInvestmentCost[gen] = float(row[f"investment_cost_{year}"])
+            """
 
-        # fuelCost and fuelCostReactive are indexed over thermal
-        # generators. Assign them only when the generator is in the
-        # thermal generators set.
-        if gen in m.fuelCost:
-            m.fuelCost[gen] = float(row[f"fuel_cost_{year}"])
+            gen_data = m.md.data["elements"]["generator"][gen]
 
-        if gen in m.fuelCostReactive:
-            m.fuelCostReactive[gen] = float(row[f"fuel_cost_reactive_{year}"])
+            unit_type = str(gen_data.get("unit_type", "")).strip().upper()
+            generator_type = str(gen_data.get("generator_type", "")).strip().lower()
+
+            if generator_type == "renewable":
+                cost_unit_type = "PV"
+            elif generator_type == "thermal":
+                cost_unit_type = "CT"
+            else:
+                cost_unit_type = "CT"
+
+            cost_rows = cost_df[cost_df["Unit Type"] == cost_unit_type]
+
+            return cost_rows.iloc[0]
+
+        for gen in m.generators:
+            row = get_cost_row_by_unit_type(gen)
+
+            m.generatorFixedCost[gen] = float(row[f"fixed_ops_cost_{year}"])
+            m.generatorVariableCost[gen] = float(row[f"var_ops_cost_{year}"])
+            m.generatorInvestmentCost[gen] = float(row[f"capex_{year}"])
+
+            # fuelCost and fuelCostReactive are indexed over thermal
+            # generators. Assign them only when the generator is in the
+            # thermal generators set.
+            if gen in m.fuelCost:
+                m.fuelCost[gen] = float(row[f"fuel_cost_{year}"])
+
+            if gen in m.fuelCostReactive:
+                m.fuelCostReactive[gen] = float(row[f"fuel_cost_reactive_{year}"])
