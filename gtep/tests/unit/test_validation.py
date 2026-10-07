@@ -41,9 +41,9 @@ def get_solution_object():
         planning_data_args={
             "stages": 2,
             "num_reps": 2,
-            "len_reps": 1,
             "num_commit": 6,
             "num_dispatch": 4,
+            "duration_representative_period": 6,
         }
     )
     TransformationFactory("gdp.bound_pretransformation").apply_to(mod_object.model)
@@ -51,7 +51,8 @@ def get_solution_object():
     opt = Highs()
     mod_object.results = opt.solve(mod_object.model)
 
-    sol_object = ExpansionPlanningSolution()
+    data_path = (Path(__file__).resolve().parents[2] / "data" / "5bus").resolve()
+    sol_object = ExpansionPlanningSolution(data_path)
     sol_object.load_from_model(mod_object)
     return sol_object
 

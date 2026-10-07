@@ -40,6 +40,8 @@ from gtep.config_options import (
     _add_common_configs,
     _add_investment_configs,
 )
+from gtep.gtep_data import ExpansionPlanningData
+from gtep.gtep_data_processing import DataProcessing
 import gtep.model_library.investment as inv
 import gtep.model_library.dispatch as disp
 import gtep.model_library.commitment as commit
@@ -50,6 +52,12 @@ import gtep.model_library.scaling as scaling
 import gtep.model_library.gen as gens
 import gtep.model_library.storage as stor
 import gtep.model_library.transmission as transm
+
+from gtep.utils import (
+    generate_period_structure_dict,
+    load_period_structure_from_json,
+    check_period_structure_consistency,
+)
 
 logger = logging.getLogger("gtep.gtep_model")
 
@@ -88,36 +96,65 @@ class ExpansionPlanningModel:
 
     def __init__(
         self,
-        config=None,
+        data: ExpansionPlanningData,
+        cost_data: DataProcessing | None = None,
+        config: dict | None = None,
         formulation=None,
-        data=None,
-        cost_data=None,
     ):
         """Initialize generation & expansion planning model object.
 
-        :param formulation: Egret stuff, to be filled
-        :param data: full set of model data
-        :param cost_data: full set of cost data for all generators
-
-        :return: Pyomo model for full GTEP
+        :param data:        Full set of model data.
+        :param cost_data:   Full set of cost data for all generators. Defaults to `None`.
+        :param config:      Non-default config options to be set. Defaults to `None`.
+        :param formulation: To be implemented (EGRET stuff).
+        :type data:         ExpansionPlanningData
+        :type cost_data:    DataProcessing | None, optional
+        :type config:       dict, optional
         """
+
+        self.config = _get_model_config()
+        self.timer = TicTocTimer()
 
         self.stages = data.stages
         self.formulation = formulation
         self.data = data
         self.cost_data = cost_data
-        self.num_reps = data.num_reps
-        self.len_reps = data.len_reps
-        self.num_commit = data.num_commit
-        self.num_dispatch = data.num_dispatch
-        self.duration_dispatch = data.duration_dispatch
-        self.config = _get_model_config()
-        self.timer = TicTocTimer()
+
+        if data.period_structure_json_file:
+            period_dict = load_period_structure_from_json(
+                data.period_structure_json_file
+            )
+        else:
+            #  Generate the period structure dictionary from provided
+            # scalars, or load it from a .json file if specified. In
+            # either case, the period structure is returned as a
+            # dictionary.
+            period_dict = generate_period_structure_dict(
+                data.num_reps,
+                data.num_commit,
+                data.num_dispatch,
+                data.duration_representative_period,
+                data.save_period_structure_file,
+            )
+
+        # Run a consistency check on commitment and dispatch
+        # durations.
+        check_period_structure_consistency(period_dict)
+
+        # Assign period structure attributes from the dictionary
+        self.num_reps = period_dict["number_representative"]
+        self.num_commit = period_dict["number_commitment"]
+        self.num_dispatch = period_dict["number_dispatch"]
+        self.duration_representative_period = period_dict[
+            "duration_representative_period"
+        ]
+        self.duration_commitment = period_dict["duration_commitment"]
+        self.duration_dispatch = period_dict["duration_dispatch"]
 
         _add_common_configs(self.config)
         _add_investment_configs(self.config)
 
-        if config:
+        if config is not None:
             for config_option, config_val in config.items():
                 self.config[config_option] = config_val
 
@@ -158,14 +195,17 @@ class ExpansionPlanningModel:
             m, self.stages, rep_per=[i for i in range(1, self.num_reps + 1)]
         )
 
-        comps.add_model_parameters(
+        comps.add_model_parameters(m)
+
+        create_stages(
             m,
+            self.stages,
             self.num_commit,
             self.num_dispatch,
+            self.duration_representative_period,
+            self.duration_commitment,
             self.duration_dispatch,
         )
-
-        create_stages(m, self.stages)
 
         obj_comp.create_objective_function(m)
 
@@ -209,8 +249,24 @@ class ExpansionPlanningModel:
         with open(outfile, "w") as fil:
             json.dump(really_bad_var_coef_list, fil)
 
+        return (
+            num_commit_dict,
+            num_dispatch_dict,
+            duration_rep_dict,
+            duration_commit_dict,
+            duration_dispatch_dict,
+        )
 
-def create_stages(m, stages):
+
+def create_stages(
+    m,
+    stages,
+    num_commit,
+    num_dispatch,
+    duration_representative_period,
+    duration_commitment,
+    duration_dispatch,
+):
     """This method constructs the block structure for the Generation
     and Transmission Expansion Planning (GTEP) model. It creates
     investment, representative period, and commitment blocks for each
@@ -262,6 +318,13 @@ def create_stages(m, stages):
         # representative_period.
         for representative_period in b_inv.representativePeriods:
             b_rep = b_inv.representativePeriod[representative_period]
+
+            b_rep.representativePeriodLength = pyo.Param(
+                initialize=duration_representative_period[representative_period],
+                within=pyo.PositiveReals,
+                units=u.hr,
+            )
+
             b_rep.representative_date = m.data.representative_dates[
                 representative_period - 1
             ]
@@ -273,15 +336,12 @@ def create_stages(m, stages):
             # b_rep.day = int(broken_date[2])
             b_rep.currentPeriod = representative_period
 
-            # [ESR NOTE: Include commitment blocks regardless of the
-            # value of include_commitment.  When include_commitment is
-            # False, generators are assumed to be always online, and
+            # Include commitment blocks regardless of the value of
+            # include_commitment.  When False, generators are on and
             # operational costs are determined solely by dispatch
-            # decisions. No redispatch for now.]
-            # if m.config["include_commitment"] or m.config["include_redispatch"]:
-            b_rep.commitmentPeriods = pyo.RangeSet(
-                m.numCommitmentPeriods[representative_period]
-            )
+            # decisions.
+            n_commit = num_commit[representative_period]
+            b_rep.commitmentPeriods = pyo.RangeSet(n_commit)
             b_rep.commitmentPeriod = pyo.Block(b_rep.commitmentPeriods)
 
             # --.--.--.--.--.--.----.--.--.--.--.--.----.--.--.--.--.--.--
@@ -289,12 +349,20 @@ def create_stages(m, stages):
             # constraints
             for commitment_period in b_rep.commitmentPeriods:
                 b_comm = b_rep.commitmentPeriod[commitment_period]
+
+                b_comm.commitmentPeriodLength = pyo.Param(
+                    initialize=duration_commitment[representative_period][
+                        commitment_period
+                    ],
+                    within=pyo.PositiveReals,
+                    units=u.hr,
+                )
+
                 b_comm.commitmentPeriod = commitment_period
 
                 if m.config["include_redispatch"]:
-                    b_comm.dispatchPeriods = pyo.RangeSet(
-                        m.numDispatchPeriods[b_rep.currentPeriod]
-                    )
+                    n_dispatch = num_dispatch[representative_period][commitment_period]
+                    b_comm.dispatchPeriods = pyo.RangeSet(n_dispatch)
                     b_comm.dispatchPeriod = pyo.Block(b_comm.dispatchPeriods)
 
                     # [TODO: update properties for this time period!]
@@ -314,21 +382,21 @@ def create_stages(m, stages):
 
                     # [TODO: This feels REALLY inelegant and
                     # bad. Check a better way of declaring these.]
-                    for period in b_comm.dispatchPeriods:
-                        b_comm.dispatchPeriod[period].periodLength = pyo.Param(
-                            initialize=1,
+                    for dispatch_period in b_comm.dispatchPeriods:
+                        b_disp = b_comm.dispatchPeriod[dispatch_period]
+                        b_disp.dispatchPeriodLength = pyo.Param(
+                            initialize=duration_dispatch[representative_period][
+                                commitment_period
+                            ][dispatch_period],
                             within=pyo.PositiveReals,
-                            # units=u.minutes,
+                            units=u.minutes,
                         )
 
                         disp.add_dispatch_variables(
-                            b_comm.dispatchPeriod[period],
-                            period,
-                            m.dispatchPeriodLength,
+                            b_disp,
+                            b_disp.dispatchPeriodLength,
                         )
-                        disp.add_dispatch_constraints(
-                            b_comm.dispatchPeriod[period], period
-                        )
+                        disp.add_dispatch_constraints(b_disp)
 
             if m.config["include_redispatch"]:
                 rep_period.add_time_links(b_rep)
@@ -359,8 +427,8 @@ def create_stages(m, stages):
             rep_period.add_representative_period_variables(b_rep, representative_period)
 
             if m.config["include_commitment"]:
-                # These logical constraint ensure the state
-                # disjuncts stay consistent.
+                # These logical constraints ensure the state disjuncts
+                # stay consistent.
                 rep_period.add_representative_period_logical_constraints(
                     b_rep, representative_period
                 )
