@@ -760,7 +760,7 @@ class TestGTEP(unittest.TestCase):
                 "include_redispatch": True,
                 "scale_loads": False,
                 "transmission": True,
-                "storage": False,
+                "storage": True,
                 "flow_model": "DC",
                 "advanced_hydro": False,
             },
@@ -783,7 +783,7 @@ class TestGTEP(unittest.TestCase):
         modObject.results = opt.solve(modObject.model)
 
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 7599415.67, places=1
+            value(modObject.model.total_cost_objective), 125950815.36, places=1
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
 
@@ -843,6 +843,6 @@ class TestGTEP(unittest.TestCase):
         modObject.results = opt.solve(modObject.model)
 
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 2911270.44, places=1
+            value(modObject.model.total_cost_objective), 2911270.44, places=1          
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
