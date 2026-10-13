@@ -420,6 +420,11 @@ class ExpansionPlanningSolution:
                 for e in exp:
                     costs[exp[e].name] = pyo.value(exp[e])
 
+        # Save objective value to costs dictionary
+        for obj in m.component_objects(pyo.Objective, descend_into=True):
+            # Scalar objective
+            costs[obj.name] = pyo.value(obj)
+
         # Loads are currently read through Prescient, which maps them
         # to buses and stores them as indexed parameters. If a future
         # workflow loads non-Prescient scalar load parameters, this
@@ -430,6 +435,20 @@ class ExpansionPlanningSolution:
                 if type(param) is IndexedParam:
                     for p in param:
                         loads[param[p].name] = pyo.value(param[p])
+
+        # Count assets in model and save a json file with this
+        # information. Here we turn any Pyomo Set (including RangeSet)
+        # into a plain list. The asstes saved are: buses, generators,
+        # branches (lines), loads, and storage.
+        load_buses = sorted(list(m.load_buses))
+        buses = sorted(list(m.buses))
+        generators = sorted(list(m.generators))
+        thermal_generators = sorted(list(m.thermalGenerators))
+        renewable_generators = sorted(list(m.renewableGenerators))
+        lines = sorted(list(m.lines))
+        # Storage, only if the model was built with storage
+        # enabled. If not, it will be an empty list.
+        storage = sorted(list(m.storage)) if hasattr(m, "storage") else []
 
         # Output file names
         output_files = {
@@ -444,6 +463,13 @@ class ExpansionPlanningSolution:
             "reserves": reserves,
             "charging": charging,
             "discharging": discharging,
+            "list_load_buses": load_buses,
+            "list_buses": buses,
+            "list_generators": generators,
+            "list_thermal_generators": thermal_generators,
+            "list_renewable_generators": renewable_generators,
+            "list_lines": lines,
+            "list_storage": storage,  # an empty list if storage is set to False
         }
 
         if not os.path.exists(folder_name):
@@ -1278,7 +1304,6 @@ class ExpansionPlanningSolution:
     def create_analysis(
         self,
         results_path,
-        gtep_model,
         save_csv=True,
         csv_path=None,
         hours_per_period=1.0,
@@ -1309,11 +1334,6 @@ class ExpansionPlanningSolution:
 
         """
 
-        m = gtep_model.model
-        md = m.md
-        md_data = md.data
-        elements = md_data["elements"]
-
         metrics_rows = []
 
         def record_metric(metric, value, units="", category=""):
@@ -1339,12 +1359,12 @@ class ExpansionPlanningSolution:
                 return json.load(f)
 
         def count_buses():
-            """This function returns the number of buses from the
-            model set.
+            """This function returns the number of buses from results
+            .json files.
 
             """
 
-            total_buses = len(list(m.buses))
+            total_buses = len(list(load_result_json("list_buses.json")))
 
             record_metric(
                 metric="buses",
@@ -1352,13 +1372,27 @@ class ExpansionPlanningSolution:
                 category="parameter_in_model",
             )
 
-            return {
-                "buses": int(total_buses),
-            }
+            return {"buses": int(total_buses)}
+
+        def count_load_buses():
+            """This function returns the number of load_buses from results
+            .json files.
+
+            """
+
+            total_load_buses = len(list(load_result_json("list_load_buses.json")))
+
+            record_metric(
+                metric="load_buses",
+                value=total_load_buses,
+                category="parameter_in_model",
+            )
+
+            return {"load_buses": int(total_load_buses)}
 
         def count_assets(asset_set, metrics):
             """This function returns total, existing, and candidate
-            assets.
+            assets from results .json files.
 
             """
 
@@ -1390,21 +1424,6 @@ class ExpansionPlanningSolution:
                 metrics[0]: int(total_assets),
                 metrics[1]: int(existing_assets),
                 metrics[2]: int(candidate_assets),
-            }
-
-        def count_loads():
-            """This function returns load count."""
-
-            total_loads = len(elements.get("load", {}))
-
-            record_metric(
-                metric="loads",
-                value=total_loads,
-                category="parameter_in_model",
-            )
-
-            return {
-                "loads": int(total_loads),
             }
 
         def calculate_total_load_gw():
@@ -1588,15 +1607,14 @@ class ExpansionPlanningSolution:
             return count
 
         def calculate_total_costs(cost_units="million"):
-            """Return total objective and major objective components.
-
-            This function reads the objective and top-level cost
-            expressions directly from the solved Pyomo model.
+            """Return total objective and major objective components
+            from `costs.json`.
 
             :param cost_units: Units used for reporting costs. Options
                                are "million" or "billion". Defaults to
                                "million".
             :return: Dictionary with total and component costs.
+
             """
             cost_scales = {
                 "million": (1e6, "M$", "million"),
@@ -1611,25 +1629,32 @@ class ExpansionPlanningSolution:
 
             scale_factor, units_label, output_suffix = cost_scales[cost_units]
 
+            # Load the JSON file using the supplied helper
+            costs = load_result_json("costs.json")
+
+            # Keys that appear in the JSON (same ones that appear in
+            # the model).
             cost_terms = {
-                "total_objective_cost": m.total_cost_objective,
-                "total_operating_cost": m.operatingCostTotal,
-                "total_expansion_cost": m.expansionCostTotal,
-                "total_penalty_cost": m.penaltyCostTotal,
+                "total_objective_cost": "total_cost_objective",
+                "total_operating_cost": "operatingCostTotal",
+                "total_expansion_cost": "expansionCostTotal",
+                "total_penalty_cost": "penaltyCostTotal",
             }
 
-            outputs = {}
+            outputs: Dict[str, float] = {}
 
-            for metric, expression in cost_terms.items():
-                value = pyo.value(expression, exception=False)
+            for metric, json_key in cost_terms.items():
+                raw_value = costs.get(json_key)
+                # value = pyo.value(expression, exception=False)
 
-                if value is None:
+                if raw_value is None:
                     logger.warning(
-                        "Could not evaluate cost expression '%s'. Skipping.",
+                        "Key `%s` not found in costs.json. Skipping this metric.",
                         metric,
                     )
                     continue
 
+                value = float(raw_value)
                 scaled_value = float(value) / scale_factor
 
                 record_metric(
@@ -1643,167 +1668,70 @@ class ExpansionPlanningSolution:
 
             return outputs
 
-        def calculate_operating_and_fixed_costs(cost_units="million"):
-            """This function returns operating-cost breakdown from
-            model expressions.
-
-            Dispatch operating cost is calculated from each dispatch
-            block's ``operatingCostDispatch`` expression. The remaining
-            portion of total operating cost is reported as
-            commitment-level fixed operating cost. This residual
-            includes fixed generator costs, startup costs, and storage
-            fixed costs when enabled, because these terms are included
-            in ``operatingCostCommitment``.
-
-            :param cost_units: Units used for reporting costs. Options
-                               are "million" or "billion". Defaults to
-                               "million".
-            :return: Dictionary with operating-cost breakdown.
-
-            """
-            cost_scales = {
-                "million": (1e6, "M$", "million"),
-                "billion": (1e9, "B$", "billion"),
-            }
-
-            if cost_units not in cost_scales:
-                raise ValueError(
-                    f"Unsupported cost_units '{cost_units}'. "
-                    "Choose 'million' or 'billion'."
-                )
-
-            scale_factor, units_label, output_suffix = cost_scales[cost_units]
-
-            total_operating_cost = pyo.value(
-                m.operatingCostTotal,
-                exception=False,
-            )
-
-            if total_operating_cost is None:
-                logger.warning(
-                    "Could not evaluate m.operatingCostTotal. "
-                    "Skipping operating-cost breakdown."
-                )
-                return {}
-
-            dispatch_operating_cost = 0.0
-
-            for stage in m.stages:
-                stage_block = m.investmentStage[stage]
-
-                for rep in stage_block.representativePeriods:
-                    rep_block = stage_block.representativePeriod[rep]
-
-                    for commitment in rep_block.commitmentPeriods:
-                        commitment_block = rep_block.commitmentPeriod[commitment]
-
-                        for dispatch in commitment_block.dispatchPeriods:
-                            dispatch_block = commitment_block.dispatchPeriod[dispatch]
-
-                            dispatch_cost = pyo.value(
-                                dispatch_block.operatingCostDispatch,
-                                exception=False,
-                            )
-
-                            if dispatch_cost is None:
-                                logger.warning(
-                                    "Could not evaluate operatingCostDispatch "
-                                    "for stage=%s, representative=%s, "
-                                    "commitment=%s, dispatch=%s. Skipping.",
-                                    stage,
-                                    rep,
-                                    commitment,
-                                    dispatch,
-                                )
-                                continue
-
-                            dispatch_operating_cost += (
-                                pyo.value(m.investmentFactor[stage])
-                                * pyo.value(m.weights[rep])
-                                * float(dispatch_cost)
-                            )
-
-            fixed_operating_cost = total_operating_cost - dispatch_operating_cost
-
-            outputs = {
-                f"total_operating_cost_{output_suffix}": (
-                    total_operating_cost / scale_factor
-                ),
-                f"dispatch_operating_cost_{output_suffix}": (
-                    dispatch_operating_cost / scale_factor
-                ),
-                f"fixed_commitment_operating_cost_{output_suffix}": (
-                    fixed_operating_cost / scale_factor
-                ),
-            }
-
-            record_metric(
-                metric="total_operating_cost",
-                value=outputs[f"total_operating_cost_{output_suffix}"],
-                units=units_label,
-                category="cost",
-            )
-            record_metric(
-                metric="dispatch_operating_cost",
-                value=outputs[f"dispatch_operating_cost_{output_suffix}"],
-                units=units_label,
-                category="cost",
-            )
-            record_metric(
-                metric="fixed_commitment_operating_cost",
-                value=outputs[f"fixed_commitment_operating_cost_{output_suffix}"],
-                units=units_label,
-                category="cost",
-            )
-
-            return outputs
-
-        # Calculate analysis metrics from model sets and parameters,
-        # saved operational result files, saved investment result
-        # files, and model cost expressions. These metrics summarize
-        # the number of assets, dispatch and and commitment results,
-        # installed candidate assets, and costs.
+        # Calculate analysis metrics from .json files. These metrics
+        # summarize the number of assets, installed candidate assets,
+        # and costs.
+        lines = list(load_result_json("list_lines.json"))
+        generators = list(load_result_json("list_generators.json"))
+        thermal_generators = list(load_result_json("list_thermal_generators.json"))
+        renewable_generators = list(load_result_json("list_renewable_generators.json"))
+        storage = list(load_result_json("list_storage.json"))
 
         outputs = {}
-
-        # Metrics from parameters in the model
         outputs.update(count_buses())
+        outputs.update(count_load_buses())
         outputs.update(
             count_assets(
-                m.lines, metrics=["branches", "existing_branches", "candidate_branches"]
+                lines,
+                metrics=["branches", "existing_branches", "candidate_branches"],
             )
         )
         outputs.update(
             count_assets(
-                m.generators,
+                generators,
                 metrics=["generators", "existing_generators", "candidate_generators"],
             )
         )
-        if m.config["storage"]:
-            outputs.update(
-                count_assets(
-                    m.storage,
-                    metrics=["storage", "existing_storage", "candidate_storage"],
-                )
+        outputs.update(
+            count_assets(
+                thermal_generators,
+                metrics=[
+                    "thermal_generators",
+                    "existing_thermal_generators",
+                    "candidate_thermal_generators",
+                ],
             )
-        outputs.update(count_loads())
+        )
+        outputs.update(
+            count_assets(
+                renewable_generators,
+                metrics=[
+                    "renewable_generators",
+                    "existing_renewable_generators",
+                    "candidate_renewable_generators",
+                ],
+            )
+        )
+        outputs.update(
+            count_assets(
+                storage,
+                metrics=["storage", "existing_storage", "candidate_storage"],
+            )
+        )
 
-        # Metrics from calculated variables in the model
-        outputs["total_generation_gw"] = calculate_total_generation_gw()
-        outputs["total_generation_gwh"] = calculate_total_generation_gwh()
         outputs["total_load_gw"] = calculate_total_load_gw()
         outputs["total_load_shed_mw"] = calculate_total_load_shed_mw()
+        outputs["total_generation_gw"] = calculate_total_generation_gw()
+        outputs["total_generation_gwh"] = calculate_total_generation_gwh()
         outputs["total_curtailment_gwh"] = calculate_total_curtailment_gwh()
-        if m.config["storage"]:
-            outputs.update(calculate_storage_operation_gwh())
+        outputs.update(calculate_storage_operation_gwh())
         outputs["installed_generators"] = count_installed_assets(
-            m.generators, "installed_generators"
+            generators, "installed_generators"
         )
         outputs["installed_branches"] = count_installed_assets(
-            m.lines, "installed_branches"
+            lines, "installed_branches"
         )
         outputs.update(calculate_total_costs(cost_units=cost_units))
-        outputs.update(calculate_operating_and_fixed_costs(cost_units=cost_units))
 
         metrics_df = pd.DataFrame(metrics_rows)
 
