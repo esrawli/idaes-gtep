@@ -83,7 +83,7 @@ def add_commitment_disjuncts(b, commitment_period):
         gens.generators_status_always_on(m, b, r_p, i_p, commitment_period)
 
     if m.config["storage"]:
-        stor.add_storage_state_disjuncts(b)
+        stor.add_storage_states(b)
 
 
 def add_commitment_constraints(b, comm_per):
@@ -117,12 +117,11 @@ def add_commitment_constraints(b, comm_per):
             for disp_per in b.dispatchPeriods
         )
 
-        if m.config["storage"]:
-            if m.config["include_commitment"]:
-                op_cost_storage = sum(
-                    m.storageFixedCost[stor] * m.storageCapacity[stor]  # in $/MWh * MWh
-                    for stor in m.storage
-                )
+        if m.config["storage"] and m.config["include_commitment"]:
+            op_cost_storage = sum(
+                m.storageFixedCost[stor] * m.storageCapacity[stor]  # in $/MWh * MWh
+                for stor in m.storage
+            )
         else:
             op_cost_storage = 0
 
@@ -161,11 +160,8 @@ def add_commitment_constraints(b, comm_per):
                 )
         else:
             op_cost_gen_state = 0
-            op_cost_gen_startup = 0
 
-        return (
-            op_cost_dispatch + op_cost_gen_state + op_cost_gen_startup + op_cost_storage
-        )
+            return op_cost_dispatch + op_cost_gen_state + op_cost_storage
 
     @b.Expression(doc="Total curtailment for commitment block in MW")
     def renewableCurtailmentCommitment(b):
