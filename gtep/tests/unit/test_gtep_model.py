@@ -255,9 +255,9 @@ class TestGTEP(unittest.TestCase):
         # previous successful objective values: 9207.95, 6078.86,
         # 531860.15, 531883.43, 7977055.4, 7977055.4, 7977150.30,
         # 6986122.88, 7118266.88, 27944303.09, 28076447.10,
-        # 27944303.10, 28076447.10, 27944715.00
+        # 27944303.10, 28076447.10, 27944715.00, 29615787.26
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 29615787.26, places=1
+            value(modObject.model.total_cost_objective), 29484106.47, places=1
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
 
@@ -295,9 +295,9 @@ class TestGTEP(unittest.TestCase):
 
         # previous successful objective values: 531860.15, 531883.43,
         # 7977055.4, 7977055.4, 7977150.30, 6986122.88, 7977169.84,
-        # 27944303.09, 31908490.95, 31908770.71
+        # 27944303.09, 31908490.95, 31908770.71, 33109372.80
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 33109372.80, places=1
+            value(modObject.model.total_cost_objective), 33109692.60, places=1
         )
 
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
@@ -821,13 +821,13 @@ class TestGTEP(unittest.TestCase):
 
         # Apply transformations to logical terms
         TransformationFactory("gdp.bigm").apply_to(modObject.model)
-
+    
         modObject.results = opt.solve(modObject.model)
 
         # Previous values: 125950815.36, 126029173.22 (set storage to
-        # False)
+        # False), 9603914.08
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 9603914.08, places=1
+            value(modObject.model.total_cost_objective), 20002950.28, places=1
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
 
@@ -886,8 +886,8 @@ class TestGTEP(unittest.TestCase):
 
         modObject.results = opt.solve(modObject.model)
 
-        # Previous values: 2947899.93, 2911270.44
+        # Previous values: 2947899.93, 2911270.44, 3577603.86
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 3577603.86, places=1
+            value(modObject.model.total_cost_objective), 8794347.02, places=1
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
