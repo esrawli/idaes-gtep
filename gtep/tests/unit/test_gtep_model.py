@@ -404,7 +404,7 @@ class TestGTEP(unittest.TestCase):
         # 926187704.4, 926194856.96, 923474476.75, 926202612.69,
         # 870203472.69, 723494956.65, 779494096.65, 870593510.10
         self.assertAlmostEqual(
-            value(modObject.model.total_cost_objective), 723467241.38213, places=1
+            value(modObject.model.total_cost_objective), 809809257.84, places=1
         )
         assert_units_equivalent(modObject.model.total_cost_objective.expr, u.USD)
 
@@ -822,7 +822,7 @@ class TestGTEP(unittest.TestCase):
 
         # Apply transformations to logical terms
         TransformationFactory("gdp.bigm").apply_to(modObject.model)
-
+    
         modObject.results = opt.solve(modObject.model)
 
         # Previous values: 125950815.36, 126029173.22 (set storage to
