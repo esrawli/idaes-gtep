@@ -184,6 +184,9 @@ class ExpansionPlanningData:
 
         self.load_storage_csv(data_path)
 
+        # After loading the initial model, modify generator types
+        self.update_generator_type(data_path)
+
         for gen in self.md.data["elements"]["generator"]:
             if "-c" in gen:  # key/Gen UID in csv file; -c = candidate?
                 self.md.data["elements"]["generator"][gen]["in_service"] = False
@@ -405,6 +408,72 @@ class ExpansionPlanningData:
             data_list.append(self.md.clone_at_time_keys(time_key_set))
 
         self.representative_data = data_list
+
+    def update_generator_type(self, data_dir):
+        """Updates the generator_type field based on the generator
+        name and other attributes.  Note: If a generator having
+        "renew" in the name is added by the user but is not part of
+        prescient's default renewable types, it will be flagged as
+        thermal and will require information like ramping and other
+        thermal data. This data won't be used in the model but needs
+        to be included to avoid issues with prescient.
+
+        The generator's unit type should end with "_RENEW" for
+        renewables and "_THERMAL" for tqqqqqqhermals that are not included
+        in the default types in Prescient.
+
+        """
+
+        # Initialize variables
+        change_count = 0
+        changed_generators = []
+        for gen in self.md.data["elements"]["generator"]:
+            original_type = self.md.data["elements"]["generator"][gen]["generator_type"]
+            unit_type = self.md.data["elements"]["generator"][gen]["unit_type"]
+
+            # Check for "_renew" or "_thermal" suffix in the generator
+            # unit_type and overwrite the generator type assigned by
+            # Prescient. This will work for unit types that end with
+            # `_RENEW` and `_RENEW-c` or `_THERMAL` and
+            # `THERMAL-c`. The `-c` is treated as part of the name but
+            # does not interfere with the check because `_renew` or
+            # `_thermal` is still the last part of the string before
+            # the suffix.
+            if unit_type.lower().endswith("_renew"):
+                new_type = "renewable"
+                self.md.data["elements"]["generator"][gen]["generator_type"] = new_type
+                change_count += 1
+                if original_type != new_type:
+                    changed_generators.append(
+                        {
+                            "generator": gen,
+                            "original_type": original_type,
+                            "new_type": new_type,
+                            "unit_type": unit_type,
+                        }
+                    )
+            elif unit_type.lower().endswith("_thermal"):
+                new_type = "thermal"
+                self.md.data["elements"]["generator"][gen]["generator_type"] = new_type
+                change_count += 1
+                if original_type != new_type:  # Only count if it actually changed
+                    changed_generators.append(
+                        {
+                            "generator": gen,
+                            "original_type": original_type,
+                            "new_type": new_type,
+                            "unit_type": unit_type,
+                        }
+                    )
+            else:
+                # Default case, leave generator_type as is.
+                pass
+
+        if change_count > 0:
+            for change in changed_generators:
+                logger.info(
+                    f"  {change['generator']}: {change['original_type']} -> {change['new_type']} (Unit Type: {change['unit_type']})"
+                )
 
     def import_load_scaling(self, load_file_name, forecast_years=None):
         """Imports load scaling data for forecast years.
