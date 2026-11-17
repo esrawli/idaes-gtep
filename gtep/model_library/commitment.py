@@ -46,8 +46,24 @@ def add_commitment_parameters(b, commitment_period, investmentStage):
         initialize=renewable_capacity_expected_init,
         mutable=True,
         units=u.MW,
-        doc="Expected renewable capacity for each renewable generator in this commitment period",
+        doc=(
+            "Available output of each renewable generator in this commitment "
+            "period if built to its full nameplate capacity"
+        ),
     )
+
+    @b.Expression(
+        m.renewableGenerators,
+        doc=(
+            "Capacity factor of each renewable generator in this commitment "
+            "period: available output per MW of built capacity"
+        ),
+    )
+    def renewableCapacityFactor(b, renewableGen):
+        nameplate = m.renewableCapacityNameplate[renewableGen]
+        if pyo.value(nameplate) <= 0:
+            return 0
+        return b.renewableCapacityExpected[renewableGen] / nameplate
 
     if m.config["advanced_hydro"]:
         hydro.fix_hydropower_limits(b, commitment_period)
@@ -117,7 +133,7 @@ def add_commitment_constraints(b, comm_per):
             for disp_per in b.dispatchPeriods
         )
 
-        if m.config["storage"]:
+        if m.config["storage"] and m.config["include_commitment"]:
             op_cost_storage = sum(
                 m.storageFixedCost[stor] * m.storageCapacity[stor]  # in $/MWh * MWh
                 for stor in m.storage
@@ -156,40 +172,26 @@ def add_commitment_constraints(b, comm_per):
                     m.fixedCost[gen] * b.commitmentPeriodLength * m.hydroCapacity[gen]
                     for gen in m.hydroGenerators
                 )
-
-            return (
-                op_cost_dispatch
-                + op_cost_gen_state
-                + op_cost_gen_startup
-                + op_cost_storage
-            )
         else:
-            op_cost_gen_state = sum(
-                m.fixedCost[gen]
-                * b.commitmentPeriodLength
-                * m.thermalCapacity[gen]
-                * b.genOn[gen].indicator_var.get_associated_binary()
-                for gen in m.thermalGenerators
-            )
-            op_cost_gen_state += sum(
-                m.fixedCost[gen]
-                * b.commitmentPeriodLength
-                * m.renewableCapacityNameplate[gen]
-                for gen in m.renewableGenerators
-            )
+            op_cost_gen_state = 0
+            op_cost_gen_startup = 0
 
-            if m.config["advanced_hydro"]:
-                op_cost_gen_state += sum(
-                    m.fixedCost[gen] * b.commitmentPeriodLength * m.hydroCapacity[gen]
-                    for gen in m.hydroGenerators
-                )
-
-            return op_cost_dispatch + op_cost_gen_state + op_cost_storage
+        return (
+            op_cost_dispatch + op_cost_gen_state + op_cost_gen_startup + op_cost_storage
+        )
 
     @b.Expression(doc="Total curtailment for commitment block in MW")
     def renewableCurtailmentCommitment(b):
         return sum(
             b.dispatchPeriod[disp_per].renewableCurtailmentDispatch
+            for disp_per in b.dispatchPeriods
+        )
+
+    @b.Expression(doc="Total curtailed renewable energy for commitment block in MWh")
+    def renewableCurtailmentEnergyCommitment(b):
+        return sum(
+            b.dispatchPeriod[disp_per].renewableCurtailmentDispatch
+            * u.convert(b.dispatchPeriod[disp_per].dispatchPeriodLength, to_units=u.hr)
             for disp_per in b.dispatchPeriods
         )
 
@@ -216,15 +218,14 @@ def add_investment_commitment_constraints(m, b, investment_stage):
         renewableCurtailmentRep = 0
         for rep_per in b.representativePeriods:
             for com_per in b.representativePeriod[rep_per].commitmentPeriods:
+                # Curtailed energy uses each dispatch period's length, so
+                # it is not double counted when a commitment period has
+                # several dispatch periods.
                 renewableCurtailmentRep += (
                     m.weights[rep_per]
                     * b.representativePeriod[rep_per]
                     .commitmentPeriod[com_per]
-                    .commitmentPeriodLength
-                    * b.representativePeriod[rep_per]
-                    .commitmentPeriod[com_per]
-                    .renewableCurtailmentCommitment  # in MW
-                    # [ESR Question: Do we need to include this term here?]
+                    .renewableCurtailmentEnergyCommitment  # in MWh
                     * m.curtailmentCost
                 )  # units are in $
         return (
