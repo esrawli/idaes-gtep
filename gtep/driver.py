@@ -149,7 +149,7 @@ mod_object.create_model()
 
 # Options include "bigm", "chull", etc.. "bigm" is set as the default.
 apply_bound_pretransformation = True
-gdp_transform = "hull"
+gdp_transform = "bigm"
 
 if apply_bound_pretransformation:
     pyo.TransformationFactory("gdp.bound_pretransformation").apply_to(mod_object.model)
