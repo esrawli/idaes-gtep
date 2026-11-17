@@ -876,6 +876,39 @@ class ExpansionPlanningSolution:
         if missing_unit_types:
             raise ValueError(f"Unit type(s) {missing_unit_types} not recognized")
 
+        # ESR: Add debugging code for Convex Hull but leave it
+        # commented for now.
+        # print("gen_data keys and values:")
+        # for g, val in gen_data.items():
+        #     print(f"  Generator: {g}, Value: {val}")
+
+        # for g, val in gen_data.items():
+
+        #     c = list(pyo.ComponentUID(g)._cids)
+        #     print(f"\nParsing CUID for generator: {g}")
+        #     print(f"Full CUID structure: {c}")
+
+        #     # Extract each level
+        #     _, (stage,) = c.pop(0)
+        #     print(f"Stage: {stage}")
+
+        #     _, (period,) = c.pop(0)
+        #     print(f"Period: {period}")
+
+        #     _, (commitment,) = c.pop(0)
+        #     print(f"Commitment: {commitment}")
+
+        #     _, (dispatch,) = c.pop(0)
+        #     print(f"Dispatch: {dispatch}")
+
+        #     gen_name = str(c[-1][0])
+        #     print(f"Generator name: {gen_name}")
+
+        # print("\nGenerator UID to type mapping:")
+        # for gen_name, gen_type in gen_uid_to_type.items():
+        #     print(f"  {gen_name} is {gen_type}")
+        # quit()
+
         # Create dictionary with generation by time index and
         # generator type for plotting. For this, parse each generation
         # variable name to recover its stage, representative period,
