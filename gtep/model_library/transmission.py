@@ -24,13 +24,17 @@ This module uses the following transmission-line sets:
         or extended. These lines do not receive GDP disjuncts.
 
     m.candidateLines
-        Candidate lines that may be operational, retired, disabled, extended,
-        or installed.
+        Candidate lines (UID ending in "-c") that may be operational, retired,
+        disabled, extended, or installed.
+
+    m.reconductorLines
+        Reconductoring lines (UID ending in "-r") that replace an existing
+        line. Only included in the model when include_reconductoring is True.
 
     m.nonStaticLines
-        Lines that may be operational, retired, disabled,
-        extended, or installed/reinstalled, including both
-        existing and candidate lines
+        Lines that may be operational, retired, disabled,extended, or
+        installed/reinstalled, including existing, candidate, and
+        reconductoring lines
 
 GDP disjuncts are created only for ``m.nonStaticLines``.
 Static lines receive deterministic transmission-flow
@@ -126,15 +130,45 @@ def _branch_ac_data(m, branch):
 
 def add_investment_transmission_constraints(m, b, investment_stage):
     non_static_lines = m.nonStaticLines
-    candidate_lines = m.candidateLines
+    # Candidate and reconductoring lines are both new lines
+    new_lines = set(m.candidateLines) | set(m.reconductorLines)
+
+    # Existing lines that a reconductoring line may replace.
+    # This set is only built if `include_reconductoring = True`
+    # so it will be empty if that is False
+    reconductored_lines = (
+        {old for _, old in m.reconductorPairs}
+        if m.config["include_reconductoring"]
+        else set()
+    )
 
     for branch in non_static_lines:
         if investment_stage == m.stages.first():
-            b.branchOperational[branch].indicator_var.fix(
-                m.md.data["elements"]["branch"][branch]["in_service"]
-            )
+            in_service = m.md.data["elements"]["branch"][branch]["in_service"]
+            if in_service and branch in reconductored_lines:
+                # An in-service line can only be retired or operational
+                # in the first stage with reconductoring on
+                b.branchInstalled[branch].indicator_var.fix(False)
+                b.branchDisabled[branch].indicator_var.fix(False)
+                b.branchExtended[branch].indicator_var.fix(False)
+            else:
+                # If reconductoring is turned off or the existing line
+                # can't be reconductored, it must be fixed to operational
+                # in the first stage
+                b.branchOperational[branch].indicator_var.fix(in_service)
 
-        if branch in candidate_lines:
+            # As for generators: a line that is not in service in the first
+            # stage cannot be extended, and a new line (candidate or
+            # reconductoring) cannot be retired before it exists.
+            if not in_service:
+                b.branchExtended[branch].indicator_var.fix(False)
+            if branch in new_lines:
+                b.branchRetired[branch].indicator_var.fix(False)
+
+        if branch in new_lines:
+            # TODO: if `transmission` == `False`, then new_lines  will be
+            # empty. Should we do the same thing with `include_investment`?
+            # `transmission` == `False` only applies to investments it seems
             if not m.config["include_investment"]:
                 b.branchDisabled[branch].indicator_var.fix(True)
 
@@ -341,6 +375,83 @@ def add_transmission_logical_constraints(m):
             )
             if stage != 1
             else pyo.LogicalConstraint.Skip
+        )
+
+    if m.config["include_reconductoring"]:
+        _add_reconductoring_logical_constraints(m)
+
+
+def _add_reconductoring_logical_constraints(m):
+    """Logical constraints linking reconductoring lines to the existing
+    lines they replace (``m.reconductorPairs``)."""
+
+    def reconductor_active(stage, branch):
+        b_inv = m.investmentStage[stage]
+        return pyo.lor(
+            b_inv.branchInstalled[branch].indicator_var,
+            b_inv.branchOperational[branch].indicator_var,
+            b_inv.branchExtended[branch].indicator_var,
+        )
+
+    reconductors_by_line = {}
+    for new, old in m.reconductorPairs:
+        reconductors_by_line.setdefault(old, []).append(new)
+
+    @m.LogicalConstraint(
+        m.stages,
+        m.reconductorPairs,
+        doc=(
+            "If a reconductor line is installed, operational, or extended, "
+            "the existing line it replaces is retired or disabled"
+        ),
+    )
+    def reconductor_replaces_existing_line(m, stage, new, old):
+        b_inv = m.investmentStage[stage]
+        return reconductor_active(stage, new).implies(
+            pyo.lor(
+                b_inv.branchRetired[old].indicator_var,
+                b_inv.branchDisabled[old].indicator_var,
+            )
+        )
+
+    lines_with_alternatives = [
+        old for old, news in reconductors_by_line.items() if len(news) > 1
+    ]
+
+    @m.LogicalConstraint(
+        m.stages,
+        lines_with_alternatives,
+        doc="At most one reconductor of each existing line is active",
+    )
+    def one_reconductor_per_line(m, stage, old):
+        return pyo.atmost(
+            1, [reconductor_active(stage, new) for new in reconductors_by_line[old]]
+        )
+
+    @m.LogicalConstraint(
+        list(reconductors_by_line),
+        doc=(
+            "A reconductored line can be retired in the first stage only if "
+            "one of its reconductors is active"
+        ),
+    )
+    def reconductor_first_stage_retirement(m, old):
+        # if an existing line is retired in the first stage,
+        # then is must be because the line is reconductored;
+        # this is set because we currently don't allow
+        # retirements in the first stage of a problem
+        first = m.stages.first()
+        return (
+            m.investmentStage[first]
+            .branchRetired[old]
+            .indicator_var.implies(
+                pyo.lor(
+                    [
+                        reconductor_active(first, new)
+                        for new in reconductors_by_line[old]
+                    ]
+                )
+            )
         )
 
 
