@@ -73,12 +73,12 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
 
     # m.md.data["elements"]["branch"] = m.md.data["elements"]["dc_branch"]
 
-    m.lines = pyo.Set(
-        initialize=m.md.data["elements"]["branch"].keys(),
-        doc="Individual transmission lines",
-    )
-
     if m.config["transmission"]:
+        m.lines = pyo.Set(
+            initialize=m.md.data["elements"]["branch"].keys(),
+            doc="Individual transmission lines",
+        )
+
         m.staticLines = pyo.Set(
             initialize=(
                 branch
@@ -125,9 +125,15 @@ def add_model_sets(m, stages, rep_per=["a", "b"], com_per=2, dis_per=2):
 
         m.nonStaticLines = pyo.Set()
 
+        m.lines = pyo.Set(
+            initialize=m.staticLines,
+            doc="Individual transmission lines",
+        )
+
     _toBranches = defaultdict(list)
     _fromBranches = defaultdict(list)
-    for branch, data in m.md.data["elements"]["branch"].items():
+    for branch in m.lines:
+        data = m.md.data["elements"]["branch"][branch]
         _toBranches[data["to_bus"]].append(branch)
         _fromBranches[data["from_bus"]].append(branch)
 
@@ -332,24 +338,12 @@ def add_model_parameters(m, years):
     m.renewableCapacityNameplate = pyo.Param(
         m.renewableGenerators,
         initialize={
-            renewableGen: (
-                m.md.data["elements"]["generator"][renewableGen]["p_max"]
-                if type(m.md.data["elements"]["generator"][renewableGen]["p_max"])
-                == float
-                else max(
-                    [
-                        max(
-                            m.data_list[i].data["elements"]["generator"][renewableGen][
-                                "p_max"
-                            ]["values"]
-                        )
-                        for i in range(len(m.data_list))
-                    ]
-                )
-            )
+            renewableGen: m.md.data["elements"]["generator"][renewableGen]["nameplate"]
             for renewableGen in m.renewableGenerators
         },
-        mutable=True,
+        # mutable is set to False because it is used to set the
+        # capacity factor and should not change
+        mutable=False,
         units=u.MW,
         doc="Maximum output of each renewable generator",
     )
