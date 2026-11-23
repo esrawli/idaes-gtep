@@ -365,8 +365,14 @@ class ExpansionPlanningData:
 
                 if nameplate_str not in (None, "", "NA"):
                     nameplate = float(nameplate_str)
+                    if nameplate == 0:
+                        raise ValueError(
+                            f"Generator {gen_uid} has a PMax MW of 0. This value must be strictly positive"
+                        )
                 else:
-                    nameplate = 0
+                    raise ValueError(
+                        f"Generator {gen_uid} does not have a valid value entered for `PMax MW`"
+                    )
 
                 if gen_uid and heat_rate is not None:
                     heat_rate_dict[gen_uid] = heat_rate
@@ -385,7 +391,9 @@ class ExpansionPlanningData:
                     nameplate_dict[gen]
                 )
             else:
-                self.md.data["elements"]["generator"][gen]["nameplate"] = 0
+                raise ValueError(
+                    f"Generator {gen} was not loaded into GTEP properly. Doublecheck `gen.csv`"
+                )
 
         thermal_heat_rates = [
             self.md.data["elements"]["generator"][gen].get("heat_rate", 0)
@@ -708,9 +716,17 @@ class ExpansionPlanningData:
         for _, row in branch_df.iterrows():
             name = row["UID"]
 
+            value = row["Static Line"]
+
+            if pd.isna(value) or (isinstance(value, str) and not value.strip()):
+                static_line = False
+            elif value in (0, 1):  # Accepts numeric 0/1
+                static_line = bool(value)
+            else:
+                raise ValueError(f"Invalid Static Line value for {name}: {value!r}")
+
             static_status = (
-                bool(row["Static Line"])
-                and self.md.data["elements"]["branch"][name]["in_service"]
+                static_line and self.md.data["elements"]["branch"][name]["in_service"]
             )
 
             self.md.data["elements"]["branch"][name]["static"] = static_status
